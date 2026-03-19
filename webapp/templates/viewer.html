@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+
+{% block title %}Report Viewer — Music Reports{% endblock %}
+{% block nav_active_viewer %}active{% endblock %}
+
+{% block head_css %}
+    .page-wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 3rem;
+    }
+
+    /* ── Section header ── */
+    .section { margin-bottom: 2.5rem; }
+    .section-header {
+      margin-bottom: .6rem;
+    }
+    .section-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Section meta bar (count + timestamp) ── */
+    .section-meta-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      gap: 1rem;
+    }
+    .section-meta {
+      font-size: .78rem;
+      color: #444;
+      white-space: nowrap;
+    }
+    .section-meta-ts {
+      font-size: .72rem;
+      color: #383838;
+      white-space: nowrap;
+    }
+
+    /* ── Card grid ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 1100px) { .card-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 780px)  { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px)  { .card-grid { grid-template-columns: 1fr; } }
+
+    /* ── Individual card ── */
+    .report-card {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: border-color .15s;
+    }
+    .report-card:hover { border-color: #333; }
+
+    .card-image-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      background: #0d0d0d;
+      overflow: hidden;
+    }
+    .card-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card-img-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #2a2a2a;
+      font-size: .75rem;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .score-badge {
+      position: absolute;
+      top: .5rem;
+      right: .5rem;
+      background: rgba(20, 51, 32, .92);
+      color: #4ade80;
+      font-size: .7rem;
+      font-weight: 700;
+      padding: .2rem .5rem;
+      border-radius: 999px;
+      letter-spacing: .04em;
+      backdrop-filter: blur(4px);
+    }
+
+    .card-body {
+      padding: .85rem .9rem .75rem;
+      display: flex;
+      flex-direction: column;
+      gap: .45rem;
+      height: 8rem;
+      overflow: hidden;
+    }
+    .card-artist {
+      font-size: .92rem;
+      font-weight: 600;
+      color: #7dd6ff;
+      text-decoration: none;
+      line-height: 1.3;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .card-artist:hover { text-decoration: underline; }
+    .card-artist-white {
+      font-size: .92rem;
+      font-weight: 600;
+      color: #fff;
+      text-decoration: none;
+      line-height: 1.3;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .card-artist-white:hover { text-decoration: underline; }
+    .card-album {
+      font-size: .8rem;
+      color: #aaa;
+      line-height: 1.3;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .card-year {
+      font-size: .72rem;
+      color: #555;
+    }
+    .card-playcount {
+      font-size: .72rem;
+      color: #555;
+    }
+    .card-sources {
+      font-size: .72rem;
+      color: #67e8f9;
+      line-height: 1.4;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .card-sources-label { color: #3a3a3a; }
+
+    /* ── Action buttons ── */
+    .card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem;
+      padding: .5rem .9rem .8rem;
+      border-top: 1px solid #1a1a1a;
+      margin-top: auto;
+    }
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      padding: .3rem .6rem;
+      border-radius: 5px;
+      background: #1a1a1a;
+      border: 1px solid #252525;
+      color: #777;
+      font-size: .72rem;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .action-btn:hover { background: #242424; color: #ccc; border-color: #333; }
+    .action-btn svg { flex-shrink: 0; }
+
+    .btn-dismiss {
+      margin-left: auto;
+      padding: .3rem .5rem;
+    }
+    .btn-dismiss:hover { background: #200808; color: #f87171; border-color: #4a1515; }
+
+    .btn-slskd.queued { color: #4ade80 !important; border-color: #143320 !important; }
+    .btn-slskd.err    { color: #f87171 !important; border-color: #4a1515 !important; }
+
+    /* ── Pagination ── */
+    .pager {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 1rem;
+      margin-bottom: .85rem;
+      padding-top: .85rem;
+      border-top: 1px solid #1a1a1a;
+    }
+    .pager-info {
+      font-size: .8rem;
+      color: #444;
+    }
+    .pager-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .4rem .9rem;
+      border-radius: 6px;
+      background: #161616;
+      border: 1px solid #242424;
+      color: #777;
+      font-size: .82rem;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .pager-btn:hover { background: #1e1e1e; color: #ccc; border-color: #333; }
+    .pager-btn.disabled {
+      opacity: .3;
+      pointer-events: none;
+      cursor: default;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      padding: 3rem 1rem;
+      text-align: center;
+      color: #444;
+      border: 1px dashed #1e1e1e;
+      border-radius: 10px;
+    }
+    .empty-state p { font-size: .9rem; margin-top: .4rem; }
+    .empty-state a { color: #2563eb; text-decoration: none; }
+    .empty-state a:hover { text-decoration: underline; }
+
+    /* ── Divider ── */
+    .section-divider {
+      border: none;
+      border-top: 1px solid #181818;
+      margin: 2.5rem 0;
+    }
+
+    /* ── Dark overlay on album art hover ── */
+    .card-image-wrap::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0);
+      transition: background .2s;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .card-image-wrap:not(.player-open):hover::after {
+      background: rgba(0,0,0,.5);
+    }
+
+    /* ── Score badge — keep above overlay ── */
+    .score-badge { z-index: 2; }
+
+    /* ── Stream icons — centered, hover-only ── */
+    .stream-icons {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      gap: .55rem;
+      z-index: 3;
+      opacity: 0;
+      transition: opacity .2s;
+      pointer-events: none;
+    }
+    .card-image-wrap:not(.player-open):hover .stream-icons {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .stream-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.8rem;
+      height: 2.8rem;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, .6);
+      border: 1.5px solid rgba(255, 255, 255, .18);
+      color: rgba(255, 255, 255, .8);
+      cursor: pointer;
+      font-family: inherit;
+      transition: background .14s, color .14s, border-color .14s, transform .1s;
+      padding: 0;
+    }
+    .stream-btn:hover { transform: scale(1.1); color: #fff; }
+    .stream-btn[data-service="apple"]:hover   { background: #fc3c44; border-color: #fc3c44; }
+    .stream-btn[data-service="spotify"]:hover { background: #1DB954; border-color: #1DB954; }
+    .stream-btn[data-service="youtube"]:hover { background: #FF0000; border-color: #FF0000; }
+    .stream-btn.loading   { opacity: .5; pointer-events: none; }
+    .stream-btn.not-found { color: #f87171 !important; }
+
+    /* ── Player overlay (fills album art area) ── */
+    .card-player {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      background: #0a0a0a;
+      display: none;
+    }
+    .card-player iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+    .player-close {
+      position: absolute;
+      top: .4rem;
+      right: .4rem;
+      z-index: 4;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, .75);
+      border: 1px solid rgba(255, 255, 255, .15);
+      color: #bbb;
+      font-size: .9rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 0;
+    }
+    .player-close:hover { color: #fff; background: rgba(0,0,0,.92); }
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  {# ── Discover Similar Artists ── #}
+  <div id="section-discover" class="section">
+    <div class="section-header">
+      <h2 id="section-discover-heading" class="section-title">Discover Similar Artists</h2>
+    </div>
+
+    {% if discover_items is none %}
+    <div class="empty-state">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" stroke-width="1.5" style="margin:0 auto 1rem;display:block">
+        <circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>
+      </svg>
+      <strong style="color:#555">No data yet</strong>
+      <p>Run the <a href="/dashboard">Discover Similar Artists</a> script to populate this section.</p>
+    </div>
+    {% else %}
+    <div id="section-discover-content">
+      {% with section="discover", items=discover_items, page=d_page, pages=d_pages, total=d_total, dismissed_count=d_dismissed_count, generated_at=d_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled %}
+      {% include "_section_cards.html" %}
+      {% endwith %}
+    </div>
+    {% endif %}
+  </div>
+
+  <hr class="section-divider">
+
+  {# ── Missing Popular Albums ── #}
+  <div id="section-missing" class="section">
+    <div class="section-header">
+      <h2 id="section-missing-heading" class="section-title">Missing Popular Albums</h2>
+    </div>
+
+    {% if missing_items is none %}
+    <div class="empty-state">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" stroke-width="1.5" style="margin:0 auto 1rem;display:block">
+        <circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>
+      </svg>
+      <strong style="color:#555">No data yet</strong>
+      <p>Run the <a href="/dashboard">Missing Popular Albums</a> script to populate this section.</p>
+    </div>
+    {% else %}
+    <div id="section-missing-content">
+      {% with section="missing", items=missing_items, page=m_page, pages=m_pages, total=m_total, dismissed_count=m_dismissed_count, generated_at=m_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled %}
+      {% include "_section_cards.html" %}
+      {% endwith %}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  let dPage = {{ d_page }};
+  let mPage = {{ m_page }};
+
+  // ── Streaming player ──────────────────────────────────────────────────────
+  let _activePlayerBtn = null;
+
+  function _closeActivePlayer() {
+    if (!_activePlayerBtn) return;
+    const wrap = _activePlayerBtn.closest('.card-image-wrap');
+    wrap.classList.remove('player-open');
+    wrap.querySelector('.card-player').style.display = 'none';
+    wrap.querySelector('.card-player iframe').src = '';
+    const art = wrap.querySelector('.card-img, .card-img-placeholder');
+    if (art) art.style.display = '';
+    _activePlayerBtn = null;
+  }
+
+  function closePlayer(closeBtn) {
+    _closeActivePlayer();
+  }
+
+  async function streamCard(btn) {
+    const wrap = btn.closest('.card-image-wrap');
+    const playerDiv = wrap.querySelector('.card-player');
+    const iframe = playerDiv.querySelector('iframe');
+
+    // Toggle off if same service already playing
+    if (_activePlayerBtn === btn) { _closeActivePlayer(); return; }
+    _closeActivePlayer();
+
+    const artist  = encodeURIComponent(btn.dataset.artist);
+    const album   = encodeURIComponent(btn.dataset.album);
+    const service = btn.dataset.service;
+
+    btn.classList.add('loading');
+    try {
+      const res  = await fetch(`/api/stream-info?artist=${artist}&album=${album}&service=${service}`);
+      const data = await res.json();
+      if (!data.found) {
+        btn.classList.add('not-found');
+        setTimeout(() => btn.classList.remove('not-found'), 1500);
+        return;
+      }
+      iframe.src = data.embed_url;
+      playerDiv.style.display = 'block';
+      wrap.classList.add('player-open');
+      const art = wrap.querySelector('.card-img, .card-img-placeholder');
+      if (art) art.style.display = 'none';
+      _activePlayerBtn = btn;
+    } finally {
+      btn.classList.remove('loading');
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async function loadSection(section, page) {
+    const otherPage = section === "discover" ? mPage : dPage;
+    const url = `/api/section/${section}?page=${page}&other_page=${otherPage}`;
+    const res = await fetch(url);
+    if (!res.ok) { console.error("Section load failed"); return; }
+    document.getElementById(`section-${section}-content`).innerHTML = await res.text();
+    if (section === "discover") dPage = page; else mPage = page;
+    document.getElementById(`section-${section}-heading`)
+            .scrollIntoView({ behavior: "smooth", block: "start" });
+    history.pushState({ d_page: dPage, m_page: mPage }, "",
+                      `/?d_page=${dPage}&m_page=${mPage}`);
+  }
+
+  async function dismissCard(btn) {
+    const card = btn.closest(".report-card");
+    const type = btn.dataset.dismissType;
+    const key = btn.dataset.dismissKey;
+    const res = await fetch("/dismiss", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, key }),
+    });
+    if (!res.ok) { console.error("Dismiss failed"); return; }
+    card.remove();
+    const currentPage = type === "discover" ? dPage : mPage;
+    await loadSection(type, currentPage);
+  }
+
+  async function sendToSlskd(btn) {
+    const artist = btn.dataset.artist;
+    const album  = btn.dataset.album;
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/slskd-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artist, album }),
+      });
+      btn.classList.add(res.ok ? "queued" : "err");
+      setTimeout(() => btn.classList.remove("queued", "err"), 2000);
+    } catch {
+      btn.classList.add("err");
+      setTimeout(() => btn.classList.remove("err"), 2000);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function copyText(text) {
+    navigator.clipboard.writeText(text).catch(() => {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    });
+  }
+
+  window.addEventListener("popstate", (e) => {
+    if (!e.state) return;
+    if (e.state.d_page !== undefined && e.state.d_page !== dPage)
+      loadSection("discover", e.state.d_page);
+    if (e.state.m_page !== undefined && e.state.m_page !== mPage)
+      loadSection("missing", e.state.m_page);
+  });
+</script>
+{% endblock %}

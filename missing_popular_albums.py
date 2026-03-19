@@ -6,10 +6,9 @@ produces an HTML report listing the highest-playcount Album/EP that is missing
 from the local collection. Results are cached and logged for repeat runs.
 """
 
-from __future__ import annotations
-
 import argparse
-import concurrent.futures
+import asyncio
+from datetime import datetime, timezone
 import html
 import json
 import logging
@@ -17,15 +16,15 @@ import os
 import random
 import re
 import sys
-import threading
 import time
 import unicodedata
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from urllib.parse import quote as url_quote
 
-import requests
+import httpx
 from mutagen import File
 from rapidfuzz import fuzz
 from tqdm import tqdm
@@ -47,13 +46,27 @@ DEFAULT_CONFIG = {
     "REQUEST_DELAY_MAX": "0.3",
     "MAX_RETRIES": "3",
     "LASTFM_API_KEY": "",
+    "NAVIDROME_URL": "",
+    "NAVIDROME_USER": "",
+    "NAVIDROME_PASS": "",
+    "NAVIDROME_MUSIC_FOLDER": "",
+    "JSON_OUT": "missing_popular_albums.json",
+    "DISMISSED_FILE": "dismissed.json",
+    # discover_similar_artists.py keys — included here so os.environ overrides work
+    "DISCOVER_HTML_OUT": "discover_similar_artists.html",
+    "DISCOVER_JSON_OUT": "discover_similar_artists.json",
+    "DISCOVER_CACHE_FILE": ".cache/similar_artists.json",
+    "DISCOVER_LOG_FILE": "discover_similar_artists.log",
+    "SUGGESTIONS_PER_ARTIST": "2",
+    "SIMILAR_ARTIST_LIMIT": "30",
+    "DISCOVER_TAG_OVERLAP": "1",
 }
 
 
-def load_env_file(path: Path) -> Dict[str, str]:
+def load_env_file(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
-    data: Dict[str, str] = {}
+    data: dict[str, str] = {}
     try:
         for raw_line in path.read_text(encoding="utf-8").splitlines():
             line = raw_line.strip()
@@ -68,13 +81,18 @@ def load_env_file(path: Path) -> Dict[str, str]:
     return data
 
 
-def load_config() -> Dict[str, str]:
+def load_config() -> dict[str, str]:
     config = dict(DEFAULT_CONFIG)
     overrides = load_env_file(ENV_FILE)
     for key, value in overrides.items():
         if not value:
             continue
         config[key] = value
+    # Docker/12-factor: OS env vars take highest precedence
+    for key in DEFAULT_CONFIG:
+        env_val = os.environ.get(key, "").strip()
+        if env_val:
+            config[key] = env_val
     return config
 
 
@@ -98,6 +116,11 @@ REQUEST_DELAY_RANGE = (
     float(CONFIG["REQUEST_DELAY_MAX"]),
 )
 MAX_RETRIES = int(CONFIG["MAX_RETRIES"])
+
+NAVIDROME_URL           = CONFIG.get("NAVIDROME_URL", "").strip()
+NAVIDROME_USER          = CONFIG.get("NAVIDROME_USER", "").strip()
+NAVIDROME_PASS          = CONFIG.get("NAVIDROME_PASS", "").strip()
+NAVIDROME_MUSIC_FOLDER  = CONFIG.get("NAVIDROME_MUSIC_FOLDER", "").strip()
 
 if REQUEST_DELAY_RANGE[0] > REQUEST_DELAY_RANGE[1]:
     REQUEST_DELAY_RANGE = (REQUEST_DELAY_RANGE[1], REQUEST_DELAY_RANGE[0])
@@ -164,13 +187,24 @@ class LocalArtist:
 
     display_name: str
     normalized_name: str
-    albums: Set[str] = field(default_factory=set)
-    album_display: Dict[str, str] = field(default_factory=dict)
+    albums: set[str] = field(default_factory=set)
+    album_display: dict[str, str] = field(default_factory=dict)
+    album_sources: dict[str, str] = field(default_factory=dict)
+    album_ids: dict[str, str] = field(default_factory=dict)  # normalized_album → navidrome id
 
     def add_album(self, normalized_album: str, display_album: str) -> None:
         if normalized_album not in self.album_display:
             self.album_display[normalized_album] = display_album
         self.albums.add(normalized_album)
+
+
+def _parse_year(date_str: str | None) -> int | None:
+    """Extract a 4-digit year from a Last.fm date string like '21 May 1997, 00:00'."""
+    if not date_str or not date_str.strip():
+        return None
+    import re
+    m = re.search(r"\b(19|20)\d{2}\b", date_str)
+    return int(m.group()) if m else None
 
 
 @dataclass
@@ -180,9 +214,10 @@ class RemoteAlbum:
     title: str
     normalized_title: str
     playcount: int
-    image_url: Optional[str]
-    url: Optional[str]
+    image_url: str | None
+    url: str | None
     tags: Sequence[str]
+    release_year: int | None = None
 
 
 @dataclass
@@ -193,9 +228,10 @@ class AlbumSuggestion:
     artist_normalized: str
     album_title: str
     album_normalized: str
-    image_url: Optional[str]
-    lastfm_url: Optional[str]
+    image_url: str | None
+    lastfm_url: str | None
     playcount: int
+    release_year: int | None = None
 
 
 class LastFMError(Exception):
@@ -203,39 +239,22 @@ class LastFMError(Exception):
 
 
 class LastFMClient:
-    """Client for interacting with the Last.fm API with retry and politeness handling."""
+    """Async client for interacting with the Last.fm API with retry and politeness handling."""
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, client: httpx.AsyncClient) -> None:
         self.api_key = api_key
-        self._thread = threading.local()
+        self._client = client
+        self._rng = random.Random(time.time_ns())
 
-    def _get_session(self) -> requests.Session:
-        session = getattr(self._thread, "session", None)
-        if session is None:
-            session = requests.Session()
-            self._thread.session = session
-        return session
-
-    def _get_random(self) -> random.Random:
-        rng = getattr(self._thread, "random", None)
-        if rng is None:
-            seed = time.time_ns() ^ threading.get_ident()
-            rng = random.Random(seed)
-            self._thread.random = rng
-        return rng
-
-    def _request(self, params: Dict[str, str]) -> Dict:
+    async def _request(self, params: dict[str, str]) -> dict:
         params_with_key = {**params, "api_key": self.api_key, "format": "json"}
-        session = self._get_session()
-        rng = self._get_random()
-        last_exception: Optional[Exception] = None
+        last_exception: Exception | None = None
         for attempt in range(1, MAX_RETRIES + 1):
-            time.sleep(rng.uniform(*REQUEST_DELAY_RANGE))
+            await asyncio.sleep(self._rng.uniform(*REQUEST_DELAY_RANGE))
             try:
-                response = session.get(
+                response = await self._client.get(
                     "https://ws.audioscrobbler.com/2.0/",
                     params=params_with_key,
-                    timeout=REQUEST_TIMEOUT,
                 )
                 if response.status_code == 429:
                     raise LastFMError("Rate limited by Last.fm")
@@ -244,11 +263,11 @@ class LastFMClient:
                 if "error" in payload:
                     raise LastFMError(payload.get("message", "Unknown Last.fm error"))
                 return payload
-            except (requests.RequestException, ValueError, LastFMError) as exc:
+            except (httpx.HTTPError, ValueError, LastFMError) as exc:
                 last_exception = exc
                 if attempt == MAX_RETRIES:
                     break
-                backoff = (0.5 * (2 ** (attempt - 1))) + rng.uniform(0, 0.25)
+                backoff = (0.5 * (2 ** (attempt - 1))) + self._rng.uniform(0, 0.25)
                 logging.debug(
                     "Retrying Last.fm request (%s/%s) after %.2fs due to: %s",
                     attempt,
@@ -256,11 +275,11 @@ class LastFMClient:
                     backoff,
                     exc,
                 )
-                time.sleep(backoff)
+                await asyncio.sleep(backoff)
         raise LastFMError(str(last_exception or "Unknown Last.fm error"))
 
-    def artist_top_albums(self, artist_name: str, limit: int = TOP_ALBUM_LIMIT) -> Dict:
-        return self._request(
+    async def artist_top_albums(self, artist_name: str, limit: int = TOP_ALBUM_LIMIT) -> dict:
+        return await self._request(
             {
                 "method": "artist.getTopAlbums",
                 "artist": artist_name,
@@ -269,9 +288,9 @@ class LastFMClient:
             }
         )
 
-    def album_info(self, artist_name: str, album_title: str) -> Optional[Dict]:
+    async def album_info(self, artist_name: str, album_title: str) -> dict | None:
         try:
-            return self._request(
+            return await self._request(
                 {
                     "method": "album.getInfo",
                     "artist": artist_name,
@@ -284,6 +303,25 @@ class LastFMClient:
                 "album.getInfo failed for %s - %s: %s", artist_name, album_title, exc
             )
             return None
+
+    async def similar_artists(self, artist_name: str, limit: int = 30) -> dict:
+        return await self._request(
+            {
+                "method": "artist.getSimilar",
+                "artist": artist_name,
+                "autocorrect": "1",
+                "limit": str(limit),
+            }
+        )
+
+    async def artist_top_tags(self, artist_name: str) -> dict:
+        return await self._request(
+            {
+                "method": "artist.getTopTags",
+                "artist": artist_name,
+                "autocorrect": "1",
+            }
+        )
 
 
 def setup_logging() -> None:
@@ -304,7 +342,7 @@ def setup_logging() -> None:
         handlers=handlers,
     )
     logging.getLogger("mutagen").setLevel(logging.ERROR)
-    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def normalize_diacritics(value: str) -> str:
@@ -365,7 +403,7 @@ def is_artist_excluded(normalized_artist: str) -> bool:
     return any(keyword in normalized_artist for keyword in EXCLUDED_ARTIST_KEYWORDS)
 
 
-def extract_tag_value(tags: Dict[str, Iterable[str]], keys: Sequence[str]) -> Optional[str]:
+def extract_tag_value(tags: dict[str, Iterable[str]], keys: Sequence[str]) -> str | None:
     for key in keys:
         value = tags.get(key)
         if not value:
@@ -376,7 +414,7 @@ def extract_tag_value(tags: Dict[str, Iterable[str]], keys: Sequence[str]) -> Op
     return None
 
 
-def read_audio_tags(file_path: Path) -> Tuple[Optional[str], Optional[str]]:
+def read_audio_tags(file_path: Path) -> tuple[str | None, str | None]:
     try:
         audio = File(file_path)
     except Exception as exc:  # pragma: no cover - defensive logging
@@ -398,7 +436,7 @@ def read_audio_tags(file_path: Path) -> Tuple[Optional[str], Optional[str]]:
     return artist, album
 
 
-def parse_album_from_path(album_dir: Path) -> Tuple[Optional[str], Optional[str]]:
+def parse_album_from_path(album_dir: Path) -> tuple[str | None, str | None]:
     artist_part = album_dir.parent.name
     album_part = album_dir.name
     match = ALBUM_DIR_PATTERN.match(album_part)
@@ -410,7 +448,7 @@ def parse_album_from_path(album_dir: Path) -> Tuple[Optional[str], Optional[str]
 
 
 def add_local_album(
-    artists: Dict[str, LocalArtist], artist_name: str, album_name: str, source: str
+    artists: dict[str, LocalArtist], artist_name: str, album_name: str, source: str
 ) -> None:
     normalized_artist = normalize_text(artist_name)
     if not normalized_artist or is_artist_excluded(normalized_artist):
@@ -427,28 +465,28 @@ def add_local_album(
     if len(artist_name) > len(artist_entry.display_name):
         artist_entry.display_name = artist_name
     artist_entry.add_album(normalized_album, album_name)
+    artist_entry.album_sources[normalized_album] = source
     logging.debug("Added album '%s' for artist '%s' from %s", album_name, artist_name, source)
 
 
-def scan_library(root: Path) -> Dict[str, LocalArtist]:
+def scan_library(root: Path) -> dict[str, LocalArtist]:
     logging.info("Scanning local library at %s", root)
-    artists: Dict[str, LocalArtist] = {}
+    artists: dict[str, LocalArtist] = {}
     if not root.exists():
         logging.error("Music root %s does not exist.", root)
         return artists
 
-    for dirpath, _, filenames in os.walk(root):
+    for dirpath, _, filenames in root.walk():
         audio_files = [
-            Path(dirpath) / filename
+            dirpath / filename
             for filename in filenames
             if Path(filename).suffix.lower() in AUDIO_EXTENSIONS
         ]
         if not audio_files:
             continue
 
-        album_dir = Path(dirpath)
-        tag_artist: Optional[str] = None
-        tag_album: Optional[str] = None
+        tag_artist: str | None = None
+        tag_album: str | None = None
         tag_found = False
 
         for audio_file in audio_files:
@@ -467,20 +505,114 @@ def scan_library(root: Path) -> Dict[str, LocalArtist]:
         album_name = tag_album
 
         if not artist_name or not album_name:
-            fallback_artist, fallback_album = parse_album_from_path(album_dir)
+            fallback_artist, fallback_album = parse_album_from_path(dirpath)
             artist_name = artist_name or fallback_artist
             album_name = album_name or fallback_album
 
         if not artist_name or not album_name:
             continue
 
-        add_local_album(artists, artist_name, album_name, source=str(album_dir))
+        add_local_album(artists, artist_name, album_name, source=str(dirpath))
 
     logging.info("Scan complete. Found %d artists.", len(artists))
     return artists
 
 
-def load_cache(cache_path: Path) -> Dict[str, Dict]:
+def scan_navidrome(base_url: str, username: str, password: str, music_folder: str = "") -> dict[str, LocalArtist]:
+    """Fetch the full album list from Navidrome via the Subsonic API."""
+    import hashlib
+    import secrets
+
+    logging.info("Fetching library from Navidrome at %s", base_url)
+    salt = secrets.token_hex(6)
+    token = hashlib.md5(f"{password}{salt}".encode()).hexdigest()
+    auth = {
+        "u": username,
+        "t": token,
+        "s": salt,
+        "v": "1.16.1",
+        "c": "missing-popular-albums",
+        "f": "json",
+    }
+    artists: dict[str, LocalArtist] = {}
+    size, offset = 500, 0
+    endpoint = f"{base_url.rstrip('/')}/rest/getAlbumList2.view"
+
+    with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+        music_folder_id: str = ""
+        if music_folder:
+            folders_resp = client.get(
+                f"{base_url.rstrip('/')}/rest/getMusicFolders.view", params=auth
+            )
+            folders_resp.raise_for_status()
+            folders = (folders_resp.json()
+                       .get("subsonic-response", {})
+                       .get("musicFolders", {})
+                       .get("musicFolder", []))
+            if isinstance(folders, dict):
+                folders = [folders]
+            for folder in folders:
+                if str(folder.get("name", "")).lower() == music_folder.lower():
+                    music_folder_id = str(folder.get("id", ""))
+                    break
+            if music_folder_id:
+                logging.info(
+                    "Filtering Navidrome scan to music folder '%s' (id=%s)",
+                    music_folder, music_folder_id,
+                )
+            else:
+                available = ", ".join(
+                    str(f.get("name", "")) for f in folders
+                ) or "(none returned)"
+                logging.error(
+                    "Music folder '%s' not found in Navidrome. Available folders: %s",
+                    music_folder,
+                    available,
+                )
+                raise SystemExit(
+                    f"ERROR: NAVIDROME_MUSIC_FOLDER='{music_folder}' not found. "
+                    f"Available: {available}"
+                )
+
+        while True:
+            params = {**auth, "type": "alphabeticalByArtist",
+                      "size": str(size), "offset": str(offset)}
+            if music_folder_id:
+                params["musicFolderId"] = music_folder_id
+            response = client.get(endpoint, params=params)
+            response.raise_for_status()
+            payload = response.json()
+            sr = payload.get("subsonic-response", {})
+            if sr.get("status") != "ok":
+                logging.error(
+                    "Navidrome error: %s",
+                    sr.get("error", {}).get("message", "unknown"),
+                )
+                break
+            album_list = sr.get("albumList2", {}).get("album", [])
+            for album in album_list:
+                album_name = album.get("name") or album.get("title", "")
+                artist_name = album.get("albumArtist") or album.get("artist", "")
+                if album_name and artist_name:
+                    album_id = album.get("id", "")
+                    source = (
+                        album.get("path")
+                        or (f"{base_url}/app/#/album/{album_id}" if album_id else "navidrome")
+                    )
+                    add_local_album(artists, artist_name, album_name, source)
+                    norm_artist = normalize_text(artist_name)
+                    norm_album = normalize_album_title(album_name)
+                    if album_id and norm_artist in artists and norm_album in artists[norm_artist].albums:
+                        artists[norm_artist].album_ids[norm_album] = album_id
+            if len(album_list) < size:
+                break
+            offset += size
+
+    logging.info("Navidrome scan complete. Found %d artists.", len(artists))
+    return artists
+
+
+def load_cache(cache_path: Path) -> dict[str, dict]:
     if not cache_path.exists():
         return {}
     try:
@@ -495,21 +627,21 @@ def load_cache(cache_path: Path) -> Dict[str, Dict]:
         return {}
 
 
-def save_cache(cache_path: Path, data: Dict[str, Dict]) -> None:
+def save_cache(cache_path: Path, data: dict[str, dict]) -> None:
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"version": CACHE_VERSION, "artists": data}
     with cache_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
 
 
-def load_cached_albums(cache: Dict[str, Dict], artist_key: str) -> Optional[List[RemoteAlbum]]:
+def load_cached_albums(cache: dict[str, dict], artist_key: str) -> list[RemoteAlbum] | None:
     cached_entry = cache.get(artist_key)
     if not cached_entry:
         return None
     albums_data = cached_entry.get("albums")
     if not isinstance(albums_data, list):
         return None
-    albums: List[RemoteAlbum] = []
+    albums: list[RemoteAlbum] = []
     for album in albums_data:
         try:
             albums.append(
@@ -520,6 +652,7 @@ def load_cached_albums(cache: Dict[str, Dict], artist_key: str) -> Optional[List
                     image_url=album.get("image_url"),
                     url=album.get("url"),
                     tags=tuple(album.get("tags", [])),
+                    release_year=album.get("release_year"),
                 )
             )
         except (KeyError, ValueError, TypeError):
@@ -529,7 +662,7 @@ def load_cached_albums(cache: Dict[str, Dict], artist_key: str) -> Optional[List
 
 
 def cache_albums(
-    cache: Dict[str, Dict], artist_key: str, artist_name: str, albums: Sequence[RemoteAlbum]
+    cache: dict[str, dict], artist_key: str, artist_name: str, albums: Sequence[RemoteAlbum]
 ) -> None:
     cache[artist_key] = {
         "artist": artist_name,
@@ -541,6 +674,7 @@ def cache_albums(
                 "image_url": album.image_url,
                 "url": album.url,
                 "tags": list(album.tags),
+                "release_year": album.release_year,
             }
             for album in albums
         ],
@@ -562,7 +696,7 @@ def upgrade_image_url(url: str) -> str:
     return url
 
 
-def extract_image(images: Optional[Sequence[Dict]]) -> Optional[str]:
+def extract_image(images: Sequence[dict] | None) -> str | None:
     if not images:
         return None
     candidates = [img for img in images if isinstance(img, dict)]
@@ -583,16 +717,18 @@ def extract_image(images: Optional[Sequence[Dict]]) -> Optional[str]:
     return None
 
 
-def fetch_album_tags(client: LastFMClient, artist_name: str, album_title: str) -> Sequence[str]:
-    info = client.album_info(artist_name, album_title)
+async def fetch_album_tags(
+    client: LastFMClient, artist_name: str, album_title: str
+) -> tuple[Sequence[str], int | None]:
+    info = await client.album_info(artist_name, album_title)
     if not info:
-        return ()
+        return (), None
     album_section = info.get("album") or {}
     if isinstance(album_section, str):
-        return ()
+        return (), None
     tags_container = album_section.get("tags") or {}
     if isinstance(tags_container, str):
-        return ()
+        tags_container = {}
     tags_section = tags_container.get("tag") or []
     if isinstance(tags_section, dict):
         tags_section = [tags_section]
@@ -601,7 +737,10 @@ def fetch_album_tags(client: LastFMClient, artist_name: str, album_title: str) -
         for tag in tags_section
         if isinstance(tag, dict) and tag.get("name")
     ]
-    return tuple(name.lower() for name in tag_names if name)
+    tags = tuple(name.lower() for name in tag_names if name)
+    wiki = album_section.get("wiki") or {}
+    year = _parse_year(wiki.get("published")) or _parse_year(album_section.get("releasedate"))
+    return tags, year
 
 
 def is_album_or_ep(title: str, tags: Sequence[str]) -> bool:
@@ -618,11 +757,11 @@ def is_album_or_ep(title: str, tags: Sequence[str]) -> bool:
     return bool(title_norm)
 
 
-def transform_top_albums(
-    client: LastFMClient, artist_name: str, albums_payload: Sequence[Dict]
-) -> List[RemoteAlbum]:
-    remote_albums: List[RemoteAlbum] = []
-    seen_titles: Set[str] = set()
+async def transform_top_albums(
+    client: LastFMClient, artist_name: str, albums_payload: Sequence[dict]
+) -> list[RemoteAlbum]:
+    remote_albums: list[RemoteAlbum] = []
+    seen_titles: set[str] = set()
     for index, album_data in enumerate(albums_payload):
         title = album_data.get("name")
         if not title:
@@ -637,8 +776,9 @@ def transform_top_albums(
             playcount = 0
         image_url = extract_image(album_data.get("image"))
         tags: Sequence[str] = ()
+        release_year: int | None = None
         if index < TAG_INFO_CHECK_TOP_N:
-            tags = fetch_album_tags(client, artist_name, title)
+            tags, release_year = await fetch_album_tags(client, artist_name, title)
         remote_albums.append(
             RemoteAlbum(
                 title=title,
@@ -647,6 +787,7 @@ def transform_top_albums(
                 image_url=image_url,
                 url=album_data.get("url"),
                 tags=tags,
+                release_year=release_year,
             )
         )
         seen_titles.add(normalized_title)
@@ -654,14 +795,14 @@ def transform_top_albums(
     return remote_albums
 
 
-def pick_top_album_ep(albums: Sequence[RemoteAlbum]) -> Optional[RemoteAlbum]:
+def pick_top_album_ep(albums: Sequence[RemoteAlbum]) -> RemoteAlbum | None:
     for album in albums:
         if is_album_or_ep(album.title, album.tags):
             return album
     return None
 
 
-def has_album(local_albums: Set[str], candidate_normalized: str) -> bool:
+def has_album(local_albums: set[str], candidate_normalized: str) -> bool:
     if candidate_normalized in local_albums:
         return True
     for local_album in local_albums:
@@ -671,11 +812,27 @@ def has_album(local_albums: Set[str], candidate_normalized: str) -> bool:
     return False
 
 
+def has_album_cross_artist(
+    local_artists: dict[str, "LocalArtist"],
+    primary_normalized: str,
+    album_normalized: str,
+) -> bool:
+    """Check if album is owned under this artist or any collaborative group containing them.
+
+    Handles cases like billy woods owning Maps under 'billy woods & Kenny Segal' —
+    the primary artist's normalized name is a substring of the collaborative key.
+    """
+    for norm_key, la in local_artists.items():
+        if primary_normalized in norm_key and has_album(la.albums, album_normalized):
+            return True
+    return False
+
+
 def build_card_html(suggestion: AlbumSuggestion) -> str:
     artist_escaped = html.escape(suggestion.artist_display)
     album_escaped = html.escape(suggestion.album_title)
     query = f"{suggestion.artist_display} {suggestion.album_title}"
-    query_encoded = requests.utils.quote(query)
+    query_encoded = url_quote(query)
     discogs_url = f"https://www.discogs.com/search/?q={query_encoded}&type=release"
     bandcamp_url = f"https://bandcamp.com/search?q={query_encoded}"
     yt_url = f"https://music.youtube.com/search?q={query_encoded}"
@@ -955,7 +1112,7 @@ def render_html(
 
 
 def summarize_results(
-    total_artists: int, suggestions: Sequence[AlbumSuggestion], cache_stats: Dict[str, int]
+    total_artists: int, suggestions: Sequence[AlbumSuggestion], cache_stats: dict[str, int]
 ) -> None:
     logging.info(
         "Finished - %d artist(s) processed, %d suggestion(s) found. Cache hits: %d, misses: %d",
@@ -970,15 +1127,15 @@ def summarize_results(
     )
 
 
-def fetch_top_albums_lastfm(
+async def fetch_top_albums_lastfm(
     client: LastFMClient,
     artist_name: str,
-    cache: Dict[str, Dict],
-    cache_lock: threading.Lock,
-    stats_lock: threading.Lock,
-    cache_stats: Dict[str, int],
+    cache: dict[str, dict],
+    cache_lock: asyncio.Lock,
+    stats_lock: asyncio.Lock,
+    cache_stats: dict[str, int],
     use_cache: bool,
-) -> List[RemoteAlbum]:
+) -> list[RemoteAlbum]:
     candidate_names = [artist_name]
     simplified = primary_artist_name(artist_name)
     if simplified and simplified.lower() != artist_name.lower():
@@ -987,43 +1144,44 @@ def fetch_top_albums_lastfm(
 
     for candidate, cache_key in zip(candidate_names, normalized_keys):
         if use_cache:
-            with cache_lock:
+            async with cache_lock:
                 cached_albums = load_cached_albums(cache, cache_key)
             if cached_albums is not None:
-                with stats_lock:
+                async with stats_lock:
                     cache_stats["hits"] += 1
                 logging.debug("Cache hit for artist '%s'", candidate)
                 return cached_albums
 
     for candidate, cache_key in zip(candidate_names, normalized_keys):
         try:
-            response = client.artist_top_albums(candidate)
+            response = await client.artist_top_albums(candidate)
         except LastFMError as exc:
             logging.warning("Failed to fetch top albums for '%s': %s", candidate, exc)
             continue
         top_albums = response.get("topalbums", {}).get("album", [])
         if isinstance(top_albums, dict):
             top_albums = [top_albums]
-        remote_albums = transform_top_albums(client, candidate, top_albums)
+        remote_albums = await transform_top_albums(client, candidate, top_albums)
         if remote_albums:
-            with stats_lock:
+            async with stats_lock:
                 cache_stats["misses"] += 1
-            with cache_lock:
+            async with cache_lock:
                 cache_albums(cache, cache_key, candidate, remote_albums)
             return remote_albums
     return []
 
 
-def process_artist(
+async def process_artist(
     artist: LocalArtist,
     client: LastFMClient,
-    cache: Dict[str, Dict],
-    cache_lock: threading.Lock,
-    stats_lock: threading.Lock,
-    cache_stats: Dict[str, int],
+    cache: dict[str, dict],
+    cache_lock: asyncio.Lock,
+    stats_lock: asyncio.Lock,
+    cache_stats: dict[str, int],
     use_cache: bool,
-) -> Optional[AlbumSuggestion]:
-    remote_albums = fetch_top_albums_lastfm(
+    local_artists: dict[str, LocalArtist] | None = None,
+) -> AlbumSuggestion | None:
+    remote_albums = await fetch_top_albums_lastfm(
         client=client,
         artist_name=artist.display_name,
         cache=cache,
@@ -1039,18 +1197,28 @@ def process_artist(
     if not top_album:
         logging.info("No qualifying album/ep for %s", artist.display_name)
         return None
-    if has_album(artist.albums, top_album.normalized_title):
+    owned = (
+        has_album_cross_artist(local_artists, artist.normalized_name, top_album.normalized_title)
+        if local_artists is not None
+        else has_album(artist.albums, top_album.normalized_title)
+    )
+    if owned:
         logging.info(
             "Top album for %s already present locally: %s",
             artist.display_name,
             top_album.title,
         )
         return None
+    local_info = "; ".join(
+        f"{title} @ {artist.album_sources.get(norm, '?')}"
+        for norm, title in sorted(artist.album_display.items())[:5]
+    )
     logging.info(
-        "Missing album for %s: %s (playcount %d)",
+        "Missing album for %s: %s (playcount %d). Local albums: [%s]",
         artist.display_name,
         top_album.title,
         top_album.playcount,
+        local_info or "(none)",
     )
     return AlbumSuggestion(
         artist_display=artist.display_name,
@@ -1060,6 +1228,7 @@ def process_artist(
         image_url=top_album.image_url,
         lastfm_url=top_album.url,
         playcount=top_album.playcount,
+        release_year=top_album.release_year,
     )
 
 
@@ -1091,12 +1260,18 @@ def parse_arguments() -> argparse.Namespace:
         "--workers",
         type=worker_count,
         default=DEFAULT_WORKERS,
-        help=f"Number of worker threads to use (1-{MAX_WORKERS}, default {DEFAULT_WORKERS}).",
+        help=f"Number of concurrent requests (1-{MAX_WORKERS}, default {DEFAULT_WORKERS}).",
+    )
+    parser.add_argument(
+        "--trace-artist",
+        metavar="NAME",
+        default=None,
+        help="Print filesystem paths for all local albums by NAME (requires Navidrome) then exit.",
     )
     return parser.parse_args()
 
 
-def main() -> None:
+async def main() -> None:
     args = parse_arguments()
     setup_logging()
     logging.info("Missing Popular Albums script started.")
@@ -1110,16 +1285,55 @@ def main() -> None:
         logging.error("Missing LASTFM_API_KEY. Exiting.")
         sys.exit(1)
 
-    client = LastFMClient(api_key=api_key)
     cache = load_cache(CACHE_FILE) if not args.no_cache else {}
-    cache_lock = threading.Lock()
-    stats_lock = threading.Lock()
+    cache_lock = asyncio.Lock()
+    stats_lock = asyncio.Lock()
     cache_stats = {"hits": 0, "misses": 0}
 
-    local_artists = scan_library(MUSIC_ROOT)
+    if NAVIDROME_URL and NAVIDROME_USER and NAVIDROME_PASS:
+        local_artists = scan_navidrome(NAVIDROME_URL, NAVIDROME_USER, NAVIDROME_PASS, NAVIDROME_MUSIC_FOLDER)
+    else:
+        local_artists = scan_library(MUSIC_ROOT)
     if not local_artists:
         logging.warning("No artists discovered in local library.")
         print("No artists discovered in the local library.")
+        return
+
+    if args.trace_artist and NAVIDROME_URL and NAVIDROME_USER and NAVIDROME_PASS:
+        import hashlib
+        import secrets as _secrets
+        import os as _os
+        query = normalize_text(args.trace_artist)
+        matches = {k: v for k, v in local_artists.items() if query in k}
+        if not matches:
+            print(f"No artist matching '{args.trace_artist}' found in local library.")
+            return
+        salt = _secrets.token_hex(6)
+        token = hashlib.md5(f"{NAVIDROME_PASS}{salt}".encode()).hexdigest()
+        auth = {"u": NAVIDROME_USER, "t": token, "s": salt,
+                "v": "1.16.1", "c": "missing-popular-albums", "f": "json"}
+        endpoint = f"{NAVIDROME_URL.rstrip('/')}/rest/getAlbum.view"
+        with httpx.Client(timeout=REQUEST_TIMEOUT) as http:
+            for artist in sorted(matches.values(), key=lambda a: a.display_name):
+                print(f"\nArtist: {artist.display_name}")
+                for norm_album, display_album in sorted(artist.album_display.items()):
+                    album_id = artist.album_ids.get(norm_album, "")
+                    print(f"  Album: {display_album}")
+                    if album_id:
+                        resp = http.get(endpoint, params={**auth, "id": album_id})
+                        resp.raise_for_status()
+                        songs = (resp.json()
+                                 .get("subsonic-response", {})
+                                 .get("album", {})
+                                 .get("song", []))
+                        if songs:
+                            path = songs[0].get("path", "")
+                            print(f"    Path: {_os.path.dirname(path) or path}")
+                        else:
+                            print(f"    Path: (no songs returned — id={album_id})")
+                    else:
+                        source = artist.album_sources.get(norm_album, "unknown")
+                        print(f"    Source: {source}")
         return
 
     artist_items = sorted(
@@ -1135,32 +1349,29 @@ def main() -> None:
             original_count,
         )
 
-    suggestions: List[AlbumSuggestion] = []
+    suggestions: list[AlbumSuggestion] = []
+    semaphore = asyncio.Semaphore(args.workers)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
-        future_to_artist = {
-            executor.submit(
-                process_artist,
-                artist,
-                client,
-                cache,
-                cache_lock,
-                stats_lock,
-                cache_stats,
-                not args.no_cache,
-            ): artist
-            for artist in artist_items
-        }
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as http:
+        client = LastFMClient(api_key=api_key, client=http)
+
+        async def bounded(artist: LocalArtist) -> AlbumSuggestion | None:
+            async with semaphore:
+                return await process_artist(
+                    artist, client, cache, cache_lock, stats_lock, cache_stats,
+                    not args.no_cache, local_artists,
+                )
+
         with tqdm(total=len(artist_items), desc="Processing artists", unit="artist") as progress:
-            for future in concurrent.futures.as_completed(future_to_artist):
-                artist = future_to_artist[future]
+            tasks = [asyncio.create_task(bounded(a)) for a in artist_items]
+            for coro in asyncio.as_completed(tasks):
                 try:
-                    suggestion = future.result()
+                    result = await coro
                 except Exception as exc:  # pragma: no cover - defensive logging
-                    logging.exception("Error processing %s: %s", artist.display_name, exc)
-                    suggestion = None
-                if suggestion:
-                    suggestions.append(suggestion)
+                    logging.exception("Error processing artist: %s", exc)
+                    result = None
+                if result:
+                    suggestions.append(result)
                 progress.update(1)
 
     suggestions.sort(key=lambda item: (item.artist_normalized, item.album_normalized))
@@ -1171,11 +1382,51 @@ def main() -> None:
         print(f"Failed to write HTML output to {HTML_OUT}. See log for details.")
         return
 
-    with cache_lock:
-        save_cache(CACHE_FILE, cache)
+    dismissed_path = Path(CONFIG.get("DISMISSED_FILE", "dismissed.json"))
+    if dismissed_path.exists():
+        try:
+            _dismissed_data = json.loads(dismissed_path.read_text(encoding="utf-8"))
+            _dismissed_missing = set(_dismissed_data.get("missing", []))
+            if _dismissed_missing:
+                before = len(suggestions)
+                suggestions = [
+                    s for s in suggestions
+                    if f"{s.artist_normalized}|{s.album_normalized}" not in _dismissed_missing
+                ]
+                logging.info("Filtered %d dismissed suggestion(s).", before - len(suggestions))
+        except Exception:
+            logging.warning("Could not read dismissed file %s", dismissed_path, exc_info=True)
 
+    json_path = Path(CONFIG.get("JSON_OUT", "missing_popular_albums.json"))
+    try:
+        with json_path.open("w", encoding="utf-8") as _f:
+            json.dump({
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "total_items": len(suggestions),
+                "items": [
+                    {
+                        "artist_display": s.artist_display,
+                        "artist_normalized": s.artist_normalized,
+                        "album_normalized": s.album_normalized,
+                        "album_title": s.album_title,
+                        "image_url": s.image_url,
+                        "lastfm_url": s.lastfm_url,
+                        "playcount": s.playcount,
+                        "release_year": s.release_year,
+                        "discogs_url": f"https://www.discogs.com/search/?q={url_quote(s.artist_display + ' ' + s.album_title)}&type=release",
+                        "bandcamp_url": f"https://bandcamp.com/search?q={url_quote(s.artist_display + ' ' + s.album_title)}",
+                        "youtube_url": f"https://music.youtube.com/search?q={url_quote(s.artist_display + ' ' + s.album_title)}",
+                    }
+                    for s in suggestions
+                ],
+            }, _f, ensure_ascii=False)
+        logging.info("JSON data written to %s", json_path)
+    except Exception:
+        logging.warning("Failed to write JSON output to %s", json_path, exc_info=True)
+
+    save_cache(CACHE_FILE, cache)
     summarize_results(len(artist_items), suggestions, cache_stats)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

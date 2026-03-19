@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Test suite
+tests/
+pytest.ini
+requirements-dev.txt
+
+# Generated outputs (written to /data volume at runtime)
+*.html
+*.log
+*.log.*
+output/
+
+# Cache (rebuilt at runtime from Last.fm API)
+.cache/
+
+# Dev artifacts
+screenshots/
+.DS_Store
+.env

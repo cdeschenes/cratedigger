@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — Music Reports</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .login-wrap {
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .branding {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .branding h1 {
+      font-size: 1.65rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+    .branding p {
+      color: #555;
+      font-size: .875rem;
+      margin-top: .35rem;
+    }
+
+    .card {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 2rem;
+    }
+
+    .error {
+      background: rgba(220, 38, 38, .1);
+      border: 1px solid rgba(220, 38, 38, .25);
+      border-radius: 8px;
+      color: #f87171;
+      font-size: .875rem;
+      padding: .65rem .85rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+      margin-bottom: 1.1rem;
+    }
+
+    label {
+      font-size: .75rem;
+      font-weight: 600;
+      color: #888;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    input {
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      border-radius: 8px;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: .95rem;
+      padding: .65rem .85rem;
+      width: 100%;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus { border-color: #2563eb; }
+    input::placeholder { color: #3a3a3a; }
+
+    button {
+      background: #2563eb;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: .95rem;
+      font-weight: 600;
+      margin-top: .5rem;
+      padding: .72rem 1rem;
+      width: 100%;
+      transition: background .15s, opacity .15s;
+    }
+    button:hover  { background: #1d4ed8; }
+    button:active { opacity: .8; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="branding">
+      <h1>Music Reports</h1>
+      <p>Sign in to continue</p>
+    </div>
+    <div class="card">
+      {% if error %}
+      <div class="error">{{ error }}</div>
+      {% endif %}
+      <form method="post" action="/login">
+        <div class="field">
+          <label for="username">Username</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            placeholder="admin"
+            autocomplete="username"
+            autofocus
+            required
+          >
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+        <button type="submit">Sign In</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

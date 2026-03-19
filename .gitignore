@@ -1,8 +1,28 @@
-# Ignore local environment files
+# Secrets
 .env
 .env.*
 !.env.example
+
+# macOS
 .DS_Store
-.cache/*
-missing_popular_albums.log
-missing_popular_albums.html
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Generated output (written to /data in Docker; local runs produce these at root)
+/*.html
+*.log
+*.log.*
+output/
+
+# Last.fm / similar-artist cache (large; rebuilt automatically)
+.cache/
+
+# Test suite (local only — not published to GitHub)
+tests/
+pytest.ini
+requirements-dev.txt

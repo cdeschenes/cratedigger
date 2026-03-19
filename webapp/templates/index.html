@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+
+{% block title %}Run Dashboard — Music Reports{% endblock %}
+{% block nav_active_dashboard %}active{% endblock %}
+
+{% block head_css %}
+    .dash-wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    .dash-header {
+      margin-bottom: 2rem;
+    }
+    .dash-header h1 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+    .dash-header p { color: #666; margin-top: .35rem; font-size: .9rem; }
+
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .card {
+      flex: 1 1 380px;
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .card-header { display: flex; align-items: center; justify-content: space-between; }
+    .card-header h2 { font-size: 1.05rem; font-weight: 600; color: #fff; }
+
+    .badge {
+      font-size: .72rem;
+      font-weight: 600;
+      padding: .22rem .6rem;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .badge-idle      { background: #1e1e1e; color: #555; }
+    .badge-running   { background: #1a3a5c; color: #5aaeef; animation: pulse 1.5s infinite; }
+    .badge-succeeded { background: #143320; color: #4ade80; }
+    .badge-failed    { background: #3a1515; color: #f87171; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+    .meta { font-size: .82rem; color: #555; display: flex; flex-direction: column; gap: .25rem; }
+    .meta span { display: flex; gap: .4rem; }
+    .meta label { color: #3a3a3a; min-width: 80px; }
+
+    .actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+
+    button, .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .5rem 1.1rem;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: .875rem;
+      font-weight: 500;
+      text-decoration: none;
+      font-family: inherit;
+      transition: opacity .15s;
+    }
+    button:disabled, .btn-disabled {
+      opacity: .35;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .btn-run  { background: #1d4ed8; color: #fff; }
+    .btn-run:hover:not(:disabled) { background: #2563eb; }
+    .btn-view { background: #1a1a1a; color: #777; border: 1px solid #252525; }
+    .btn-view:hover:not(.btn-disabled) { background: #222; color: #aaa; }
+
+    .log-panel { display: none; flex-direction: column; gap: .5rem; }
+    .log-panel.visible { display: flex; }
+
+    .log-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .log-toolbar span { font-size: .78rem; color: #444; }
+    .btn-clear {
+      background: none;
+      border: 1px solid #252525;
+      color: #444;
+      padding: .25rem .6rem;
+      font-size: .75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-clear:hover { border-color: #444; color: #777; }
+
+    pre.log-output {
+      background: #0d0d0d;
+      border: 1px solid #1e1e1e;
+      border-radius: 6px;
+      padding: .75rem 1rem;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: .78rem;
+      line-height: 1.5;
+      color: #888;
+      max-height: 320px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      z-index: 999;
+    }
+    .toast {
+      background: #3a1515;
+      color: #f87171;
+      border: 1px solid #5a2020;
+      border-radius: 8px;
+      padding: .65rem 1rem;
+      font-size: .85rem;
+      animation: fadein .2s ease;
+    }
+    @keyframes fadein { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+{% endblock %}
+
+{% block content %}
+<div class="dash-wrap">
+  <div class="dash-header">
+    <h1>Run Dashboard</h1>
+    <p>Trigger script runs manually and watch live output.</p>
+  </div>
+
+  <div class="cards">
+    {% for job_id, label in labels.items() %}
+    {% set job = jobs[job_id] %}
+    {% set has_report = reports[job_id] %}
+    {% set next_run = next_runs[job_id] %}
+    <div class="card" id="card-{{ job_id }}">
+      <div class="card-header">
+        <h2>{{ label }}</h2>
+        <span class="badge badge-{{ job.status }}" id="badge-{{ job_id }}">{{ job.status }}</span>
+      </div>
+
+      <div class="meta">
+        <span>
+          <label>Last run</label>
+          <span id="last-run-{{ job_id }}">{{ job.finished_at or "Never" }}</span>
+        </span>
+        {% if next_run %}
+        <span>
+          <label>Next run</label>
+          <span>{{ next_run }}</span>
+        </span>
+        {% elif loop.first and schedule_missing %}
+        <span><label>Schedule</label><span>{{ schedule_missing }}</span></span>
+        {% elif not loop.first and schedule_discover %}
+        <span><label>Schedule</label><span>{{ schedule_discover }}</span></span>
+        {% endif %}
+        <span>
+          <label>Exit code</label>
+          <span id="exit-{{ job_id }}">{{ job.exit_code if job.exit_code is not none else "—" }}</span>
+        </span>
+      </div>
+
+      <div class="actions">
+        <button
+          class="btn-run"
+          id="run-btn-{{ job_id }}"
+          onclick="triggerRun('{{ job_id }}')"
+          {% if job.status == "running" %}disabled{% endif %}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+          Run Now
+        </button>
+        {% set has_json = json_data[job_id] %}
+        <a
+          class="btn btn-view {% if not has_json %}btn-disabled{% endif %}"
+          {% if has_json %}href="/#section-{{ job_id }}"{% endif %}
+        >
+          View in Viewer
+        </a>
+        <a
+          class="btn btn-view {% if not has_report %}btn-disabled{% endif %}"
+          {% if has_report %}href="/report/{{ job_id }}" target="_blank"{% endif %}
+        >
+          Raw Report
+        </a>
+      </div>
+
+      <div class="log-panel {% if job.status == 'running' %}visible{% endif %}" id="log-panel-{{ job_id }}">
+        <div class="log-toolbar">
+          <span>Output</span>
+          <button class="btn-clear" onclick="clearLog('{{ job_id }}')">Clear</button>
+        </div>
+        <pre class="log-output" id="log-{{ job_id }}"></pre>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+  const sources = {};
+
+  function formatDate(iso) {
+    if (!iso) return "—";
+    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById("toasts");
+    const el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = msg;
+    t.appendChild(el);
+    setTimeout(() => el.remove(), 5000);
+  }
+
+  function setBadge(jobId, status) {
+    const b = document.getElementById("badge-" + jobId);
+    b.className = "badge badge-" + status;
+    b.textContent = status;
+  }
+
+  function setRunBtn(jobId, disabled) {
+    document.getElementById("run-btn-" + jobId).disabled = disabled;
+  }
+
+  function showLog(jobId) {
+    document.getElementById("log-panel-" + jobId).classList.add("visible");
+  }
+
+  function clearLog(jobId) {
+    document.getElementById("log-" + jobId).textContent = "";
+  }
+
+  function appendLog(jobId, line) {
+    const pre = document.getElementById("log-" + jobId);
+    pre.textContent += line + "\n";
+    pre.scrollTop = pre.scrollHeight;
+  }
+
+  function openStream(jobId) {
+    if (sources[jobId]) { sources[jobId].close(); delete sources[jobId]; }
+    const es = new EventSource("/logs/" + jobId);
+    sources[jobId] = es;
+
+    es.onmessage = (e) => appendLog(jobId, e.data);
+
+    es.addEventListener("done", () => {
+      es.close();
+      delete sources[jobId];
+      fetch("/status/" + jobId)
+        .then(r => r.json())
+        .then(data => {
+          setBadge(jobId, data.status);
+          setRunBtn(jobId, false);
+          const lastRun = document.getElementById("last-run-" + jobId);
+          if (lastRun) lastRun.textContent = formatDate(data.finished_at);
+          const exitEl = document.getElementById("exit-" + jobId);
+          if (exitEl) exitEl.textContent = data.exit_code ?? "—";
+        })
+        .catch(() => {});
+    });
+
+    es.onerror = () => {
+      es.close();
+      delete sources[jobId];
+      appendLog(jobId, "[connection closed]");
+      setRunBtn(jobId, false);
+    };
+  }
+
+  function triggerRun(jobId) {
+    setRunBtn(jobId, true);
+    setBadge(jobId, "running");
+    clearLog(jobId);
+    showLog(jobId);
+
+    fetch("/run/" + jobId, { method: "POST" })
+      .then(r => {
+        if (r.status === 409) {
+          showToast("Already running — wait for it to finish.");
+          setBadge(jobId, "running");
+          openStream(jobId);
+          return;
+        }
+        if (!r.ok) {
+          r.text().then(t => showToast("Error: " + t));
+          setRunBtn(jobId, false);
+          setBadge(jobId, "failed");
+          return;
+        }
+        openStream(jobId);
+      })
+      .catch(err => {
+        showToast("Network error: " + err);
+        setRunBtn(jobId, false);
+      });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    {% for job_id, job in jobs.items() %}
+    {% if job.status == "running" %}
+    openStream("{{ job_id }}");
+    {% endif %}
+    {% endfor %}
+  });
+</script>
+{% endblock %}

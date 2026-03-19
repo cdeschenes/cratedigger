@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}Help — Music Reports{% endblock %}
+{% block nav_active_help %}active{% endblock %}
+
+{% block head_css %}
+    .help-wrap {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    .help-hero {
+      margin-bottom: 2.5rem;
+    }
+    .help-hero h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+    .help-hero p {
+      color: #666;
+      font-size: .9rem;
+      margin-top: .5rem;
+      line-height: 1.6;
+    }
+
+    .help-section {
+      margin-bottom: 2.25rem;
+    }
+    .help-section h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #e0e0e0;
+      margin-bottom: .85rem;
+      padding-bottom: .5rem;
+      border-bottom: 1px solid #1e1e1e;
+    }
+    .help-section p {
+      font-size: .875rem;
+      color: #888;
+      line-height: 1.65;
+      margin-bottom: .65rem;
+    }
+    .help-section p:last-child { margin-bottom: 0; }
+
+    .help-steps {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: .65rem;
+    }
+    .help-steps li {
+      display: flex;
+      gap: .85rem;
+      align-items: flex-start;
+      font-size: .875rem;
+      color: #888;
+      line-height: 1.5;
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      color: #555;
+      font-size: .72rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+    }
+    .config-table th {
+      text-align: left;
+      color: #555;
+      font-weight: 600;
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      padding: .45rem .75rem;
+      border-bottom: 1px solid #1e1e1e;
+    }
+    .config-table td {
+      padding: .5rem .75rem;
+      border-bottom: 1px solid #141414;
+      color: #888;
+      vertical-align: top;
+      line-height: 1.4;
+    }
+    .config-table tr:last-child td { border-bottom: none; }
+    .config-table code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: .8rem;
+      color: #aaa;
+      background: #181818;
+      padding: .1rem .35rem;
+      border-radius: 4px;
+    }
+
+    .note-box {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-left: 3px solid #2563eb;
+      border-radius: 6px;
+      padding: .85rem 1rem;
+      font-size: .82rem;
+      color: #777;
+      line-height: 1.6;
+    }
+    .note-box strong { color: #aaa; }
+
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+{% endblock %}
+
+{% block content %}
+<div class="help-wrap">
+
+  <div class="help-hero">
+    <h1>Help &amp; Documentation</h1>
+    <p>Music Reports scans your Navidrome library against Last.fm to surface albums you're missing and artists you might enjoy.</p>
+  </div>
+
+  <div class="help-section">
+    <h2>Getting Started</h2>
+    <ol class="help-steps">
+      <li>
+        <span class="step-num">1</span>
+        <span>Go to <a href="/dashboard">Run Dashboard</a> and click <strong>Run Now</strong> on either job. Both scripts connect to Navidrome and Last.fm — the first run may take several minutes depending on library size.</span>
+      </li>
+      <li>
+        <span class="step-num">2</span>
+        <span>Watch the live log output stream in real time. When the run finishes with exit code 0, results are ready.</span>
+      </li>
+      <li>
+        <span class="step-num">3</span>
+        <span>Return to the <a href="/">Report Viewer</a> to browse paginated cards. Use <strong>Prev / Next</strong> to navigate each section independently without reloading the page.</span>
+      </li>
+      <li>
+        <span class="step-num">4</span>
+        <span><strong>Preview an album:</strong> hover over any album art to reveal streaming icons. Click a service icon to open an embedded player inside the card. Click × to close it and return to the album art. Apple Music works with no setup; Spotify and YouTube require credentials in <code>.env</code> — see Streaming Previews below.</span>
+      </li>
+      <li>
+        <span class="step-num">5</span>
+        <span>Each card links out to Last.fm, Discogs, Bandcamp, and YouTube Music. Use <strong>Copy</strong> to copy the artist and album title to your clipboard for searching elsewhere.</span>
+      </li>
+      <li>
+        <span class="step-num">6</span>
+        <span>If SLSKD is configured, click the <strong>SLSKD</strong> button on any card to queue a search directly in your Soulseek daemon. The result appears in the SLSKD UI instantly.</span>
+      </li>
+      <li>
+        <span class="step-num">7</span>
+        <span>Use the <strong>✕</strong> dismiss button to hide any card you've already acted on. Dismissed items are remembered across sessions and are excluded from future script runs too.</span>
+      </li>
+    </ol>
+  </div>
+
+  <div class="help-section">
+    <h2>Streaming Previews</h2>
+    <p>Hovering over album art reveals service icons. Clicking one searches for the album and loads an embedded player. Only configured services are shown.</p>
+    <table class="config-table">
+      <thead>
+        <tr><th>Variable</th><th>Required</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>SPOTIFY_CLIENT_ID</code><br><code>SPOTIFY_CLIENT_SECRET</code></td>
+          <td>Both required for Spotify</td>
+          <td>Create a Spotify app at <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com</a>. Requires a Spotify Premium account (as of Feb 2026).</td>
+        </tr>
+        <tr>
+          <td><code>YOUTUBE_API_KEY</code></td>
+          <td>Required for YouTube</td>
+          <td>Must be a <strong>YouTube Data API v3</strong> key — not the IFrame Player API key. In Google Cloud Console: APIs &amp; Services → Library → search "YouTube Data API v3" → Enable. The key is then usable for search.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:.75rem"><strong>Apple Music</strong> requires no credentials and works immediately.</p>
+    <p>After adding credentials to <code>Docker/music-reports/.env</code>, restart the container (<code>docker compose down &amp;&amp; docker compose up -d</code>) — no rebuild required.</p>
+  </div>
+
+  <div class="help-section">
+    <h2>Scheduling</h2>
+    <p>Both scripts can run automatically on a cron schedule. Set these environment variables in your <code>.env</code> file (5-field cron syntax):</p>
+    <table class="config-table">
+      <thead>
+        <tr><th>Variable</th><th>Example</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>SCHEDULE_MISSING</code></td><td><code>0 3 * * 0</code></td><td>Run every Sunday at 3 AM</td></tr>
+        <tr><td><code>SCHEDULE_DISCOVER</code></td><td><code>0 4 * * 0</code></td><td>Run every Sunday at 4 AM</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:.75rem">Leave the variables unset or blank to disable scheduling. The next scheduled run time is shown on the Run Dashboard.</p>
+  </div>
+
+  <div class="help-section">
+    <h2>Configuration Reference</h2>
+    <table class="config-table">
+      <thead>
+        <tr><th>Variable</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>AUTH_USER</code></td><td>Login username (default: <code>admin</code>)</td></tr>
+        <tr><td><code>AUTH_PASS</code></td><td>Login password — must be set, empty disables login</td></tr>
+        <tr><td><code>SECRET_KEY</code></td><td>Session signing key — set a long random string in production</td></tr>
+        <tr><td><code>LASTFM_API_KEY</code></td><td>Your Last.fm API key (required)</td></tr>
+        <tr><td><code>NAVIDROME_URL</code></td><td>Full URL of your Navidrome instance</td></tr>
+        <tr><td><code>NAVIDROME_USER</code></td><td>Navidrome username</td></tr>
+        <tr><td><code>NAVIDROME_PASS</code></td><td>Navidrome password</td></tr>
+        <tr><td><code>NAVIDROME_MUSIC_FOLDER</code></td><td>Music folder name to scan (must match exactly)</td></tr>
+        <tr><td><code>MUSIC_ROOT</code></td><td>Path to your music library on the host (mounted read-only)</td></tr>
+        <tr><td><code>DISCOVER_TAG_OVERLAP</code></td><td>Minimum shared Last.fm tags to accept a similarity match (default: 1)</td></tr>
+        <tr><td><code>SPOTIFY_CLIENT_ID</code></td><td>Spotify app client ID — enables the Spotify streaming preview button</td></tr>
+        <tr><td><code>SPOTIFY_CLIENT_SECRET</code></td><td>Spotify app client secret</td></tr>
+        <tr><td><code>YOUTUBE_API_KEY</code></td><td>YouTube Data API v3 key — enables the YouTube streaming preview button</td></tr>
+        <tr><td><code>SLSKD_URL</code></td><td>Base URL of your SLSKD instance — enables the SLSKD search button on every card</td></tr>
+        <tr><td><code>SLSKD_API_KEY</code></td><td>API key for SLSKD authentication (preferred over username/password)</td></tr>
+        <tr><td><code>SLSKD_USER</code> / <code>SLSKD_PASS</code></td><td>Fallback credentials if not using an API key</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="help-section">
+    <h2>SLSKD Integration</h2>
+    <p>When configured, each album card shows a <strong>SLSKD</strong> button in the action bar. Clicking it queues a search for that artist and album directly in your running <a href="https://github.com/slskd/slskd" target="_blank" rel="noopener">SLSKD</a> instance — no copy-paste required. The search appears in the SLSKD UI for you to browse results and download.</p>
+    <table class="config-table" style="margin-top:.75rem">
+      <thead>
+        <tr><th>Variable</th><th>Required</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>SLSKD_URL</code></td>
+          <td>Yes</td>
+          <td>Full base URL of your SLSKD instance, e.g. <code>https://slskd.yourdomain.com</code> or <code>http://10.20.30.x:5030</code>. No trailing slash.</td>
+        </tr>
+        <tr>
+          <td><code>SLSKD_API_KEY</code></td>
+          <td>Preferred</td>
+          <td>API key set in SLSKD's <code>appsettings.yml</code> under <code>web.authentication.api_keys</code>. This is simpler and more secure than username/password.</td>
+        </tr>
+        <tr>
+          <td><code>SLSKD_USER</code> / <code>SLSKD_PASS</code></td>
+          <td>Fallback</td>
+          <td>Used if no API key is set. The webapp obtains a JWT via <code>POST /api/v0/session</code> and caches it for 23 hours.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:.75rem">After adding credentials to <code>Docker/music-reports/.env</code>, restart the container — no rebuild required.</p>
+    <div class="note-box" style="margin-top:.75rem">
+      <strong>Note:</strong> A simple restart (<code>docker compose down &amp;&amp; docker compose up -d</code>) picks up new environment variables without a full rebuild.
+    </div>
+  </div>
+
+  <div class="help-section">
+    <h2>How Matching Works</h2>
+    <p>
+      <strong>Missing Popular Albums</strong> scans your local files, queries Last.fm for each artist's top albums by global playcount,
+      and flags any album not present in your library. Results are sorted alphabetically by artist.
+    </p>
+    <p>
+      <strong>Discover Similar Artists</strong> uses Last.fm's <code>artist.getSimilar</code> API. The similarity score
+      reflects shared listener overlap, not genre similarity — so artists from different genres can appear if their audiences overlap.
+      The <code>DISCOVER_TAG_OVERLAP</code> setting filters out weak matches by requiring a minimum number of shared genre tags.
+    </p>
+    <div class="note-box" style="margin-top:.85rem">
+      <strong>Note:</strong> Scores near 100% do not guarantee a genre match. They mean Last.fm listeners who play Artist A also tend to play Artist B.
+      Use the Discogs and Last.fm links on each card to verify before adding to your collection.
+    </div>
+  </div>
+
+  <div class="help-section">
+    <h2>About</h2>
+    <p>Music Reports is a self-hosted tool for managing and exploring your personal music library. It runs entirely on your local network and does not send any data to third parties beyond the Last.fm and Navidrome APIs you configure.</p>
+    <p>Version <strong>{{ version }}</strong> &mdash; source code coming to GitHub soon.</p>
+  </div>
+
+</div>
+{% endblock %}
