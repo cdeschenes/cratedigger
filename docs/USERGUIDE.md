@@ -1,4 +1,4 @@
-# User guide — Missing Popular Albums
+# User guide — Cratedigger
 
 This guide covers how both scripts work, how to set them up, and how to get the most out of the web dashboard. It assumes you've read the README and have a working environment.
 
@@ -41,7 +41,7 @@ Requests are rate-limited by a random delay between `REQUEST_DELAY_MIN` and `REQ
 
 **Similar artist discovery.** For each local artist, the script calls `artist.getSimilar` and takes up to `SIMILAR_ARTIST_LIMIT` results. Each result is fuzzy-matched against every local artist name. Any candidate not already in the collection is kept, up to `SUGGESTIONS_PER_ARTIST` per local artist. Results are globally deduplicated — if two local artists both suggest "Armand Hammer", there is one card, and the "Similar to" line shows both sources.
 
-**Genre tag filter.** If `DISCOVER_TAG_OVERLAP` is greater than zero, the script fetches top genre tags for every candidate and every source artist in parallel. A candidate passes if it shares at least `DISCOVER_TAG_OVERLAP` non-trivial tags with at least one of its source artists. Tags like "seen live", "favourite", and "awesome" are on a blocklist and don't count. If a candidate has no tags at all, or all source artists have no tags, it passes through rather than being dropped silently.
+**Genre tag filter / re-score.** Tags are always fetched when `DISCOVER_TAG_OVERLAP > 0` or `DISCOVER_SIMILARITY_MODE=tags`. In `lastfm` mode, candidates are filtered by minimum shared-tag count (`DISCOVER_TAG_OVERLAP`). In `tags` mode, candidates are re-scored by Jaccard genre-tag similarity and any candidate with zero tag overlap is excluded — fixing cross-genre mismatch cases. Tags like "seen live", "favourite", and "awesome" are on a blocklist and don't count toward any score.
 
 **Top album enrichment.** Each surviving candidate gets its most popular qualifying album fetched from Last.fm. Candidates with no qualifying album are dropped. The remaining suggestions are sorted by similarity score descending.
 
@@ -204,13 +204,26 @@ How many of an artist's top Last.fm albums are fetched and inspected. The defaul
 
 Only the top N albums (by playcount, within the fetched list) make individual `album.getInfo` API calls to retrieve tags. The rest are filtered by title keywords alone. The default is 3. This exists to reduce API calls — tag lookups double the number of requests per artist for the checked albums.
 
+### DISCOVER_SIMILARITY_MODE
+
+Controls how candidates discovered via `artist.getSimilar` are scored and filtered.
+
+| Value | Behavior |
+|-------|----------|
+| `lastfm` (default) | Candidates are sorted by Last.fm's collaborative-filtering match score (shared listener overlap). `DISCOVER_TAG_OVERLAP` applies as a post-filter. |
+| `tags` | Candidates are re-scored by **Jaccard genre-tag similarity** — the ratio of shared genre tags to total distinct genre tags between the candidate and its source artists. Any candidate with zero tag overlap is hard-excluded, regardless of `DISCOVER_TAG_OVERLAP`. Results are sorted by Jaccard score descending. |
+
+Use `tags` mode if you're seeing cross-genre mismatches — for example, an ambient artist appearing alongside hip-hop suggestions. Last.fm's listener overlap can produce these because audiences sometimes cross genre lines even when the music doesn't.
+
 ### DISCOVER_TAG_OVERLAP
 
-The minimum number of matching genre tags required to keep a similar-artist candidate. The tag comparison ignores tags on a blocklist (seen live, favourite, awesome, etc.) that carry no real genre signal.
+The minimum number of matching genre tags required to keep a similar-artist candidate (in `lastfm` mode). The tag comparison ignores tags on a blocklist (seen live, favourite, awesome, etc.) that carry no real genre signal.
 
 Set to `0` to disable genre filtering entirely — every candidate from `artist.getSimilar` passes through as long as they're not already in your collection.
 
 Set to `2` or higher for stricter genre alignment. Useful if you're getting suggestions that are similar to one of your artists in Last.fm's model but don't match the kind of music you actually want.
+
+In `tags` mode this setting is ignored — the Jaccard score threshold (>0.0) is always enforced.
 
 ### SUGGESTIONS_PER_ARTIST
 

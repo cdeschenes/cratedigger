@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Help — Music Reports{% endblock %}
+{% block title %}Help — Cratedigger{% endblock %}
 {% block nav_active_help %}active{% endblock %}
 
 {% block head_css %}
@@ -120,6 +120,140 @@
 
     a { color: #2563eb; text-decoration: none; }
     a:hover { text-decoration: underline; }
+
+    /* Icon guide */
+    .icon-group-label {
+      font-size: .72rem;
+      font-weight: 600;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin: 1.1rem 0 .55rem;
+    }
+    .icon-group-label:first-child { margin-top: 0; }
+
+    .icon-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .6rem;
+      margin-bottom: .25rem;
+    }
+    .icon-entry {
+      display: flex;
+      align-items: flex-start;
+      gap: .55rem;
+      background: #0e0e0e;
+      border: 1px solid #1e1e1e;
+      border-radius: 7px;
+      padding: .55rem .75rem .55rem .6rem;
+      min-width: 160px;
+      flex: 1 1 160px;
+      max-width: 240px;
+    }
+    .icon-demo {
+      flex-shrink: 0;
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 5px;
+      background: #1a1a1a;
+      border: 1px solid #252525;
+      color: #777;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon-demo.stream-apple  { color: #fc3c44; }
+    .icon-demo.stream-spot   { color: #1DB954; }
+    .icon-demo.stream-yt     { color: #FF0000; }
+    .icon-demo.action-copy   { color: #7dd6ff; }
+    .icon-demo.action-slskd  { color: #888; }
+    .icon-demo.action-dismiss { color: #f87171; border-color: #4a1515; background: #200808; }
+    .icon-demo.badge-score   {
+      width: auto; height: auto; padding: .15rem .4rem;
+      background: rgba(0,0,0,.7); border: 1px solid #1e1e1e;
+      border-radius: 5px; color: #4ade80;
+      font-size: .7rem; font-weight: 700;
+    }
+    .icon-meta { display: flex; flex-direction: column; gap: .15rem; }
+    .icon-name { font-size: .8rem; font-weight: 600; color: #bbb; line-height: 1.2; }
+    .icon-desc { font-size: .74rem; color: #555; line-height: 1.4; }
+
+    .card-anatomy {
+      background: #0e0e0e;
+      border: 1px solid #1e1e1e;
+      border-radius: 8px;
+      overflow: hidden;
+      max-width: 340px;
+      margin-bottom: 1.1rem;
+    }
+    .anatomy-img {
+      background: #1a1a1a;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      color: #333;
+      font-size: .8rem;
+    }
+    .anatomy-badge {
+      position: absolute;
+      top: .45rem; right: .45rem;
+      background: rgba(0,0,0,.75);
+      border: 1px solid #2a2a2a;
+      border-radius: 5px;
+      padding: .15rem .45rem;
+      font-size: .7rem;
+      font-weight: 700;
+      color: #4ade80;
+    }
+    .anatomy-streams {
+      position: absolute;
+      bottom: .6rem; left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: .5rem;
+    }
+    .anatomy-stream-btn {
+      width: 2.2rem; height: 2.2rem;
+      border-radius: 50%;
+      background: rgba(0,0,0,.7);
+      border: 1px solid #333;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .anatomy-body {
+      padding: .65rem .9rem .5rem;
+    }
+    .anatomy-artist { font-size: .82rem; font-weight: 600; color: #7dd6ff; }
+    .anatomy-album { font-size: .78rem; color: #888; margin-top: .1rem; }
+    .anatomy-meta { font-size: .72rem; color: #444; margin-top: .2rem; }
+    .anatomy-links {
+      display: flex; gap: .3rem;
+      padding: .5rem .9rem;
+      border-top: 1px solid #1a1a1a;
+    }
+    .anatomy-link-btn {
+      width: 1.75rem; height: 1.75rem;
+      border-radius: 5px; background: #1a1a1a;
+      border: 1px solid #252525; color: #555;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .6rem;
+    }
+    .anatomy-actions {
+      display: flex; gap: .35rem; align-items: center;
+      padding: .4rem .9rem .65rem;
+    }
+    .anatomy-action-btn {
+      display: inline-flex; align-items: center; gap: .25rem;
+      padding: .3rem .55rem; border-radius: 5px;
+      background: #1a1a1a; border: 1px solid #252525;
+      color: #777; font-size: .68rem; font-weight: 500;
+    }
+    .anatomy-dismiss {
+      margin-left: auto;
+      background: #200808; border-color: #4a1515; color: #f87171;
+      padding: .3rem .5rem;
+    }
 {% endblock %}
 
 {% block content %}
@@ -127,7 +261,7 @@
 
   <div class="help-hero">
     <h1>Help &amp; Documentation</h1>
-    <p>Music Reports scans your Navidrome library against Last.fm to surface albums you're missing and artists you might enjoy.</p>
+    <p>Cratedigger scans your Navidrome library against Last.fm to surface albums you're missing and artists you might enjoy.</p>
   </div>
 
   <div class="help-section">
@@ -162,6 +296,186 @@
         <span>Use the <strong>✕</strong> dismiss button to hide any card you've already acted on. Dismissed items are remembered across sessions and are excluded from future script runs too.</span>
       </li>
     </ol>
+  </div>
+
+  <div class="help-section">
+    <h2>Card Reference</h2>
+    <p>Each result is shown as a card with album art, metadata, and a two-row action bar at the bottom.</p>
+
+    <!-- Anatomy diagram -->
+    <div class="card-anatomy">
+      <div class="anatomy-img">
+        <span>Album Art</span>
+        <span class="anatomy-badge">94%</span>
+        <div class="anatomy-streams">
+          <div class="anatomy-stream-btn" style="color:#fc3c44">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          </div>
+          <div class="anatomy-stream-btn" style="color:#1DB954">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="12" fill="currentColor" opacity=".15"/><path d="M17.9 10.9C14.7 9 9.35 8.8 6.3 9.75c-.5.15-1-.15-1.15-.6-.15-.5.15-1 .6-1.15 3.55-1.05 9.4-.85 13.1 1.35.45.25.6.85.35 1.3-.25.35-.85.5-1.3.25zm-.1 2.8c-.25.35-.7.5-1.05.25-2.7-1.65-6.8-2.15-9.95-1.15-.4.1-.85-.1-.95-.5-.1-.4.1-.85.5-.95 3.65-1.1 8.15-.55 11.25 1.35.3.15.45.65.2 1zm-1.2 2.75c-.2.3-.55.4-.85.2-2.35-1.45-5.3-1.75-8.8-.95-.35.1-.65-.15-.75-.45-.1-.35.15-.65.45-.75 3.8-.85 7.1-.5 9.7 1.1.35.2.4.55.25.85z"/></svg>
+          </div>
+          <div class="anatomy-stream-btn" style="color:#FF0000">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="anatomy-body">
+        <div class="anatomy-artist">Artist Name</div>
+        <div class="anatomy-album">Album Title</div>
+        <div class="anatomy-meta">2019 · 1,234,567 plays</div>
+      </div>
+      <div class="anatomy-links">
+        <div class="anatomy-link-btn" title="Last.fm"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>
+        <div class="anatomy-link-btn" title="Discogs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg></div>
+        <div class="anatomy-link-btn" title="Bandcamp"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg></div>
+        <div class="anatomy-link-btn" title="YouTube Music"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+      </div>
+      <div class="anatomy-actions">
+        <div class="anatomy-action-btn">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          Copy
+        </div>
+        <div class="anatomy-action-btn">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          SLSKD
+        </div>
+        <div class="anatomy-action-btn anatomy-dismiss">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Streaming icons -->
+    <div class="icon-group-label">Streaming preview — hover the album art</div>
+    <div class="icon-row">
+      <div class="icon-entry">
+        <div class="icon-demo stream-apple">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">Apple Music</span>
+          <span class="icon-desc">Opens an embedded player. No credentials needed.</span>
+        </div>
+      </div>
+      <div class="icon-entry">
+        <div class="icon-demo stream-spot">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.9 10.9C14.7 9 9.35 8.8 6.3 9.75c-.5.15-1-.15-1.15-.6-.15-.5.15-1 .6-1.15 3.55-1.05 9.4-.85 13.1 1.35.45.25.6.85.35 1.3-.25.35-.85.5-1.3.25zm-.1 2.8c-.25.35-.7.5-1.05.25-2.7-1.65-6.8-2.15-9.95-1.15-.4.1-.85-.1-.95-.5-.1-.4.1-.85.5-.95 3.65-1.1 8.15-.55 11.25 1.35.3.15.45.65.2 1zm-1.2 2.75c-.2.3-.55.4-.85.2-2.35-1.45-5.3-1.75-8.8-.95-.35.1-.65-.15-.75-.45-.1-.35.15-.65.45-.75 3.8-.85 7.1-.5 9.7 1.1.35.2.4.55.25.85z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">Spotify</span>
+          <span class="icon-desc">Requires <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> in <code>.env</code>.</span>
+        </div>
+      </div>
+      <div class="icon-entry">
+        <div class="icon-demo stream-yt">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">YouTube</span>
+          <span class="icon-desc">Requires <code>YOUTUBE_API_KEY</code> (Data API v3) in <code>.env</code>.</span>
+        </div>
+      </div>
+    </div>
+    <p style="margin-top:.6rem;font-size:.8rem;color:#555">Click × in the top-right of the player to close it and return to the album art. Clicking the same icon again also closes it.</p>
+
+    <!-- External link icons -->
+    <div class="icon-group-label">External links — always visible below the art</div>
+    <div class="icon-row">
+      <div class="icon-entry">
+        <div class="icon-demo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">Last.fm</span>
+          <span class="icon-desc">Opens the artist page on Last.fm.</span>
+        </div>
+      </div>
+      <div class="icon-entry">
+        <div class="icon-demo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">Discogs</span>
+          <span class="icon-desc">Searches for the album on Discogs.</span>
+        </div>
+      </div>
+      <div class="icon-entry">
+        <div class="icon-demo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">Bandcamp</span>
+          <span class="icon-desc">Searches for the artist on Bandcamp.</span>
+        </div>
+      </div>
+      <div class="icon-entry">
+        <div class="icon-demo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">YouTube Music</span>
+          <span class="icon-desc">Searches for the album on YouTube Music.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="icon-group-label">Action buttons — bottom row of each card</div>
+    <div class="icon-row">
+      <div class="icon-entry">
+        <div class="icon-demo action-copy">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">Copy</span>
+          <span class="icon-desc">Copies "Artist Album" to the clipboard for pasting into any search box.</span>
+        </div>
+      </div>
+      <div class="icon-entry">
+        <div class="icon-demo action-slskd">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">SLSKD</span>
+          <span class="icon-desc">Queues a search in your Soulseek daemon. Turns green on success. Requires <code>SLSKD_URL</code> in <code>.env</code>.</span>
+        </div>
+      </div>
+      <div class="icon-entry">
+        <div class="icon-demo action-dismiss">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </div>
+        <div class="icon-meta">
+          <span class="icon-name">Dismiss</span>
+          <span class="icon-desc">Permanently hides this card. Persisted across sessions and excluded from future script runs.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Score badge -->
+    <div class="icon-group-label">Discover cards only</div>
+    <div class="icon-row">
+      <div class="icon-entry">
+        <div class="icon-demo badge-score">94%</div>
+        <div class="icon-meta">
+          <span class="icon-name">Similarity score</span>
+          <span class="icon-desc">Top-right of the album art. Higher = stronger match to your library. Meaning depends on <code>DISCOVER_SIMILARITY_MODE</code> — see How Matching Works.</span>
+        </div>
+      </div>
+      <div class="icon-entry" style="align-items:center">
+        <div style="flex-shrink:0;font-size:.72rem;color:#7dd6ff;font-weight:600">Similar to:</div>
+        <div class="icon-meta" style="margin-left:.35rem">
+          <span class="icon-name" style="color:#888;font-weight:400">Artist A, Artist B</span>
+          <span class="icon-desc">Artists in your library that led to this suggestion.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="help-section">
+    <h2>Navigating Results</h2>
+    <p>Each section (Discover and Missing) has its own independent <strong>Prev / Next</strong> pager. Clicking a page button updates only that section without reloading the full page. The URL updates so you can bookmark or share a specific page, and browser Back / Forward navigate between pages as expected.</p>
+    <p>The count in the section header shows how many results are available and how many have been dismissed this session. The page indicator (e.g. <strong>3 / 8</strong>) tells you where you are. Prev is disabled on page 1; Next is disabled on the last page.</p>
+    <p>After dismissing a card the current page reloads automatically to fill the gap. When a section has no results yet, an empty state with a link to the Run Dashboard is shown.</p>
   </div>
 
   <div class="help-section">
@@ -220,6 +534,7 @@
         <tr><td><code>NAVIDROME_MUSIC_FOLDER</code></td><td>Music folder name to scan (must match exactly)</td></tr>
         <tr><td><code>MUSIC_ROOT</code></td><td>Path to your music library on the host (mounted read-only)</td></tr>
         <tr><td><code>DISCOVER_TAG_OVERLAP</code></td><td>Minimum shared Last.fm tags to accept a similarity match (default: 1)</td></tr>
+        <tr><td><code>DISCOVER_SIMILARITY_MODE</code></td><td><code>lastfm</code> (default) sorts by shared-listener score. <code>tags</code> re-scores by genre-tag Jaccard similarity and drops zero-overlap matches — eliminates cross-genre results like ambient→hip-hop.</td></tr>
         <tr><td><code>SPOTIFY_CLIENT_ID</code></td><td>Spotify app client ID — enables the Spotify streaming preview button</td></tr>
         <tr><td><code>SPOTIFY_CLIENT_SECRET</code></td><td>Spotify app client secret</td></tr>
         <tr><td><code>YOUTUBE_API_KEY</code></td><td>YouTube Data API v3 key — enables the YouTube streaming preview button</td></tr>
@@ -268,19 +583,21 @@
       and flags any album not present in your library. Results are sorted alphabetically by artist.
     </p>
     <p>
-      <strong>Discover Similar Artists</strong> uses Last.fm's <code>artist.getSimilar</code> API. The similarity score
-      reflects shared listener overlap, not genre similarity — so artists from different genres can appear if their audiences overlap.
-      The <code>DISCOVER_TAG_OVERLAP</code> setting filters out weak matches by requiring a minimum number of shared genre tags.
+      <strong>Discover Similar Artists</strong> uses Last.fm's <code>artist.getSimilar</code> API. By default (<code>DISCOVER_SIMILARITY_MODE=lastfm</code>),
+      the similarity score reflects shared listener overlap — so artists from different genres can appear if their audiences overlap.
+      Set <code>DISCOVER_SIMILARITY_MODE=tags</code> to re-score candidates by genre-tag Jaccard similarity instead, which eliminates
+      cross-genre mismatches (e.g. an ambient artist appearing alongside hip-hop).
+      <code>DISCOVER_TAG_OVERLAP</code> sets the minimum shared-tag threshold when using <code>lastfm</code> mode.
     </p>
     <div class="note-box" style="margin-top:.85rem">
-      <strong>Note:</strong> Scores near 100% do not guarantee a genre match. They mean Last.fm listeners who play Artist A also tend to play Artist B.
+      <strong>Note:</strong> In <code>lastfm</code> mode, scores near 100% do not guarantee a genre match — they mean Last.fm listeners who play Artist A also tend to play Artist B.
       Use the Discogs and Last.fm links on each card to verify before adding to your collection.
     </div>
   </div>
 
   <div class="help-section">
     <h2>About</h2>
-    <p>Music Reports is a self-hosted tool for managing and exploring your personal music library. It runs entirely on your local network and does not send any data to third parties beyond the Last.fm and Navidrome APIs you configure.</p>
+    <p>Cratedigger is a self-hosted tool for managing and exploring your personal music library. It runs entirely on your local network and does not send any data to third parties beyond the Last.fm and Navidrome APIs you configure.</p>
     <p>Version <strong>{{ version }}</strong> &mdash; source code coming to GitHub soon.</p>
   </div>
 

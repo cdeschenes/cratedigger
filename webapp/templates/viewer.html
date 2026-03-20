@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Report Viewer — Music Reports{% endblock %}
+{% block title %}Report Viewer — Cratedigger{% endblock %}
 {% block nav_active_viewer %}active{% endblock %}
 
 {% block head_css %}
@@ -161,14 +161,42 @@
     }
     .card-sources-label { color: #3a3a3a; }
 
-    /* ── Action buttons ── */
+    /* ── Action button area ── */
     .card-actions {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: .4rem;
-      padding: .5rem .9rem .8rem;
+      padding: .55rem .9rem .75rem;
       border-top: 1px solid #1a1a1a;
       margin-top: auto;
+    }
+
+    /* Row 1: icon-only external links */
+    .card-links {
+      display: flex;
+      gap: .3rem;
+    }
+    .link-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 5px;
+      background: #1a1a1a;
+      border: 1px solid #252525;
+      color: #555;
+      text-decoration: none;
+      flex-shrink: 0;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .link-btn:hover { background: #242424; color: #bbb; border-color: #333; }
+
+    /* Row 2: labeled action buttons */
+    .card-action-row {
+      display: flex;
+      gap: .35rem;
+      align-items: center;
     }
     .action-btn {
       display: inline-flex;
@@ -197,6 +225,39 @@
 
     .btn-slskd.queued { color: #4ade80 !important; border-color: #143320 !important; }
     .btn-slskd.err    { color: #f87171 !important; border-color: #4a1515 !important; }
+
+    /* ── Toast notifications ── */
+    #toast-container {
+      position: fixed;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      pointer-events: none;
+    }
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      padding: .55rem .85rem;
+      border-radius: 8px;
+      font-size: .8rem;
+      font-weight: 500;
+      color: #e0e0e0;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      box-shadow: 0 4px 16px rgba(0,0,0,.5);
+      opacity: 0;
+      transform: translateY(.5rem);
+      transition: opacity .18s, transform .18s;
+      pointer-events: none;
+      max-width: 22rem;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.toast-ok  { border-color: #143320; color: #4ade80; }
+    .toast.toast-err { border-color: #4a1515; color: #f87171; }
 
     /* ── Pagination ── */
     .pager {
@@ -266,6 +327,10 @@
     .card-image-wrap:not(.player-open):hover::after {
       background: rgba(0,0,0,.5);
     }
+    .card-image-wrap.player-open    { aspect-ratio: unset; }
+    .card-image-wrap.player-apple   { height: 460px; }
+    .card-image-wrap.player-spotify { height: 200px; }
+    .card-image-wrap.player-youtube { height: 220px; }
 
     /* ── Score badge — keep above overlay ── */
     .score-badge { z-index: 2; }
@@ -322,6 +387,7 @@
       height: 100%;
       border: none;
       display: block;
+      overflow: hidden;
     }
     .player-close {
       position: absolute;
@@ -347,6 +413,7 @@
 {% endblock %}
 
 {% block content %}
+<div id="toast-container"></div>
 <div class="page-wrap">
 
   {# ── Discover Similar Artists ── #}
@@ -409,7 +476,7 @@
   function _closeActivePlayer() {
     if (!_activePlayerBtn) return;
     const wrap = _activePlayerBtn.closest('.card-image-wrap');
-    wrap.classList.remove('player-open');
+    wrap.classList.remove('player-open', 'player-apple', 'player-spotify', 'player-youtube');
     wrap.querySelector('.card-player').style.display = 'none';
     wrap.querySelector('.card-player iframe').src = '';
     const art = wrap.querySelector('.card-img, .card-img-placeholder');
@@ -445,7 +512,7 @@
       }
       iframe.src = data.embed_url;
       playerDiv.style.display = 'block';
-      wrap.classList.add('player-open');
+      wrap.classList.add('player-open', `player-${service}`);
       const art = wrap.querySelector('.card-img, .card-img-placeholder');
       if (art) art.style.display = 'none';
       _activePlayerBtn = btn;
@@ -483,6 +550,19 @@
     await loadSection(type, currentPage);
   }
 
+  function showToast(message, type /* "ok" | "err" */) {
+    const container = document.getElementById("toast-container");
+    const t = document.createElement("div");
+    t.className = `toast toast-${type}`;
+    t.textContent = message;
+    container.appendChild(t);
+    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add("show")));
+    setTimeout(() => {
+      t.classList.remove("show");
+      t.addEventListener("transitionend", () => t.remove(), { once: true });
+    }, 3000);
+  }
+
   async function sendToSlskd(btn) {
     const artist = btn.dataset.artist;
     const album  = btn.dataset.album;
@@ -493,11 +573,18 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ artist, album }),
       });
-      btn.classList.add(res.ok ? "queued" : "err");
+      if (res.ok) {
+        btn.classList.add("queued");
+        showToast(`Queued: ${artist} — ${album}`, "ok");
+      } else {
+        btn.classList.add("err");
+        showToast("SLSKD search failed", "err");
+      }
       setTimeout(() => btn.classList.remove("queued", "err"), 2000);
     } catch {
       btn.classList.add("err");
       setTimeout(() => btn.classList.remove("err"), 2000);
+      showToast("Could not reach SLSKD", "err");
     } finally {
       btn.disabled = false;
     }

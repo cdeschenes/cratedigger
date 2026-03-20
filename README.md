@@ -1,4 +1,4 @@
-# Missing Popular Albums
+# Cratedigger
 
 Two music discovery scripts that scan your local collection and generate HTML reports from Last.fm data. Run them from the command line or let a Docker-hosted web dashboard trigger and schedule them for you.
 
@@ -106,6 +106,7 @@ All three of `NAVIDROME_URL`, `NAVIDROME_USER`, and `NAVIDROME_PASS` must be set
 | `SUGGESTIONS_PER_ARTIST` | `2` | Max candidate artists to collect per local artist from Last.fm's similar-artist list. |
 | `SIMILAR_ARTIST_LIMIT` | `30` | How many similar artists Last.fm returns per query before filtering. |
 | `DISCOVER_TAG_OVERLAP` | `1` | Minimum number of shared Last.fm genre tags between a candidate and at least one source artist. Set to `0` to disable genre filtering entirely. |
+| `DISCOVER_SIMILARITY_MODE` | `lastfm` | `lastfm`: sort by Last.fm shared-listener score (default). `tags`: re-score candidates by genre-tag Jaccard similarity and drop zero-overlap matches — fixes cross-genre mismatches. |
 
 ### Web app / Docker only
 

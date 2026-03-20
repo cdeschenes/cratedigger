@@ -70,6 +70,15 @@ DISCOVER_LOG_FILE = Path(
 SUGGESTIONS_PER_ARTIST = int(CONFIG.get("SUGGESTIONS_PER_ARTIST", "2"))
 SIMILAR_ARTIST_LIMIT = int(CONFIG.get("SIMILAR_ARTIST_LIMIT", "30"))
 DISCOVER_TAG_OVERLAP = int(CONFIG.get("DISCOVER_TAG_OVERLAP", "1"))
+_raw_mode = CONFIG.get("DISCOVER_SIMILARITY_MODE", "lastfm").strip().lower()
+if _raw_mode not in ("lastfm", "tags"):
+    import warnings
+    warnings.warn(
+        f"Unknown DISCOVER_SIMILARITY_MODE {_raw_mode!r} — defaulting to 'lastfm'",
+        stacklevel=1,
+    )
+    _raw_mode = "lastfm"
+DISCOVER_SIMILARITY_MODE: str = _raw_mode
 DISCOVER_CACHE_VERSION = 2
 
 # Tags that carry no genre signal — excluded from overlap checks
@@ -341,11 +350,13 @@ async def fetch_artist_tags(
 # ---------------------------------------------------------------------------
 
 
-def build_card_html(suggestion: SimilarSuggestion) -> str:
-    artist_escaped = html.escape(suggestion.candidate_display)
+def build_card_html(suggestion: SimilarSuggestion, slskd_enabled: bool = False) -> str:
+    artist_esc = html.escape(suggestion.candidate_display)
+    album_title = suggestion.top_album_title or ""
+    album_esc = html.escape(album_title)
     query_str = (
-        f"{suggestion.candidate_display} {suggestion.top_album_title}"
-        if suggestion.top_album_title
+        f"{suggestion.candidate_display} {album_title}"
+        if album_title
         else suggestion.candidate_display
     )
     query = url_quote(query_str)
@@ -353,31 +364,20 @@ def build_card_html(suggestion: SimilarSuggestion) -> str:
     discogs_url = f"https://www.discogs.com/search/?q={query}&type=release"
     bandcamp_url = f"https://bandcamp.com/search?q={query}"
     yt_url = f"https://music.youtube.com/search?q={query}"
+    score_pct = f"{suggestion.similarity_score * 100:.0f}%"
+    year = suggestion.top_album_release_year or ""
+    playcount_fmt = (
+        f"{suggestion.top_album_playcount:,}" if suggestion.top_album_playcount else "—"
+    )
+    meta = f"{year} · {playcount_fmt} plays" if year else f"{playcount_fmt} plays"
 
     if suggestion.top_album_image_url:
-        album_escaped = html.escape(suggestion.top_album_title or "")
         cover_html = (
-            f'<div class="cover">'
             f'<img src="{html.escape(suggestion.top_album_image_url)}" '
-            f'alt="{album_escaped} cover art" loading="lazy"></div>'
+            f'alt="{album_esc} cover art" loading="lazy">'
         )
     else:
-        cover_html = '<div class="cover placeholder">No Artwork</div>'
-
-    score_pct = f"{suggestion.similarity_score * 100:.0f}%"
-
-    if suggestion.top_album_title:
-        playcount_fmt = (
-            f"{suggestion.top_album_playcount:,}" if suggestion.top_album_playcount else "—"
-        )
-        album_line = (
-            f'<p class="album-line">'
-            f'{html.escape(suggestion.top_album_title)}'
-            f'<span class="plays">{playcount_fmt} plays</span>'
-            f"</p>"
-        )
-    else:
-        album_line = '<p class="album-line no-album">No qualifying album found</p>'
+        cover_html = '<div class="cover-placeholder">No Artwork</div>'
 
     # Truncate source artists list for display
     sources = suggestion.source_artists
@@ -387,26 +387,84 @@ def build_card_html(suggestion: SimilarSuggestion) -> str:
     else:
         displayed = ", ".join(html.escape(s) for s in sources)
 
+    copy_text = html.escape(f"{suggestion.candidate_display} {album_title}".strip(), quote=True)
+    copy_btn = (
+        f'<button class="action-btn" onclick="copyText(\'{copy_text}\')" title="Copy artist &amp; album">'
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14'
+        'c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>'
+        '</svg> Copy</button>'
+    ) if album_title else ""
+
+    slskd_btn = (
+        f'<button class="action-btn btn-slskd" data-artist="{artist_esc}" data-album="{album_esc}"'
+        f' onclick="sendToSlskd(this)" title="Search on SLSKD">'
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16'
+        'c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5z'
+        'm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>'
+        '</svg> SLSKD</button>'
+    ) if slskd_enabled and album_title else ""
+
     return (
-        '<article class="card">'
-        f"{cover_html}"
-        '<div class="info">'
-        '<div class="title-block">'
-        f'<div class="title-text">'
-        f'<h2><a href="{lastfm_url}" target="_blank" rel="noopener noreferrer">{artist_escaped}</a></h2>'
-        f"{album_line}"
-        f'<p class="similar-to">Similar to: {displayed}</p>'
-        "</div>"
+        '<article class="report-card">'
+        f'<div class="card-image-wrap" data-artist="{artist_esc}" data-album="{album_esc}">'
+        f'{cover_html}'
+        '<div class="stream-icons">'
+        '<button class="stream-btn" data-service="apple" onclick="streamCard(this)" title="Apple Music">'
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4'
+        ' 4-1.79 4-4V7h4V3h-6z"/></svg></button>'
+        '<button class="stream-btn" data-service="spotify" onclick="streamCard(this)" title="Spotify">'
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M17.9 10.9C14.7 9 9.35 8.8 6.3 9.75c-.5.15-1-.15-1.15-.6-.15-.5.15-1 .6-1.15'
+        ' 3.55-1.05 9.4-.85 13.1 1.35.45.25.6.85.35 1.3-.25.35-.85.5-1.3.25z'
+        'm-.1 2.8c-.25.35-.7.5-1.05.25-2.7-1.65-6.8-2.15-9.95-1.15-.4.1-.85-.1-.95-.5'
+        '-.1-.4.1-.85.5-.95 3.65-1.1 8.15-.55 11.25 1.35.3.15.45.65.2 1z'
+        'm-1.2 2.75c-.2.3-.55.4-.85.2-2.35-1.45-5.3-1.75-8.8-.95-.35.1-.65-.15-.75-.45'
+        '-.1-.35.15-.65.45-.75 3.8-.85 7.1-.5 9.7 1.1.35.2.4.55.25.85z"/>'
+        '</svg></button>'
+        '<button class="stream-btn" data-service="youtube" onclick="streamCard(this)" title="YouTube">'
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M8 5v14l11-7z"/></svg></button>'
+        '</div>'
+        '<div class="card-player">'
+        '<button class="player-close" onclick="closePlayer(this)">'
+        '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">'
+        '<path d="M18 6L6 18M6 6l12 12"/></svg></button>'
+        '<iframe frameborder="0" allowfullscreen allow="autoplay; encrypted-media"></iframe>'
+        '</div>'
         f'<span class="score-badge">{score_pct}</span>'
-        "</div>"
-        '<div class="links">'
-        f'<a href="{lastfm_url}" target="_blank" rel="noopener noreferrer">Last.fm</a>'
-        f'<a href="{discogs_url}" target="_blank" rel="noopener noreferrer">Discogs</a>'
-        f'<a href="{bandcamp_url}" target="_blank" rel="noopener noreferrer">Bandcamp</a>'
-        f'<a href="{yt_url}" target="_blank" rel="noopener noreferrer">YouTube Music</a>'
-        "</div>"
-        "</div>"
-        "</article>"
+        '</div>'
+        '<div class="card-body">'
+        f'<a class="card-artist" href="{lastfm_url}" target="_blank" rel="noopener">{artist_esc}</a>'
+        f'<div class="card-album">{album_esc or "No qualifying album"}</div>'
+        f'<div class="card-meta">{meta}</div>'
+        f'<div class="similar-to">Similar to: {displayed}</div>'
+        '</div>'
+        '<div class="card-actions">'
+        '<div class="card-links">'
+        f'<a class="link-btn" href="{lastfm_url}" target="_blank" rel="noopener" title="Last.fm">'
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4'
+        ' 4-1.79 4-4V7h4V3h-6z"/></svg></a>'
+        f'<a class="link-btn" href="{discogs_url}" target="_blank" rel="noopener" title="Discogs">'
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+        '<circle cx="12" cy="12" r="9"/>'
+        '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg></a>'
+        f'<a class="link-btn" href="{bandcamp_url}" target="_blank" rel="noopener" title="Bandcamp">'
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg></a>'
+        f'<a class="link-btn" href="{yt_url}" target="_blank" rel="noopener" title="YouTube Music">'
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M8 5v14l11-7z"/></svg></a>'
+        '</div>'
+        '<div class="card-action-row">'
+        f'{copy_btn}'
+        f'{slskd_btn}'
+        '</div>'
+        '</div>'
+        '</article>'
     )
 
 
@@ -416,173 +474,149 @@ def render_html(
     total_artists: int,
 ) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    cards_html = "\n    ".join(build_card_html(s) for s in suggestions)
+    slskd_enabled = bool(CONFIG.get("SLSKD_URL"))
+    cards_html = "\n    ".join(build_card_html(s, slskd_enabled) for s in suggestions)
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Discover Similar Artists</title>
   <style>
-    :root {{
-      color-scheme: dark;
-    }}
-    * {{
-      box-sizing: border-box;
-    }}
+    :root {{ color-scheme: dark; }}
+    *, *::before, *::after {{ box-sizing: border-box; }}
     body {{
-      margin: 0;
-      padding: 2rem;
+      margin: 0; padding: 2rem;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0a0a0a;
-      color: #f3f3f3;
+      background: #0a0a0a; color: #f3f3f3;
     }}
-    header {{
-      max-width: 1200px;
-      margin: 0 auto 2rem;
-    }}
-    h1 {{
-      margin: 0 0 0.5rem;
-      font-size: 2.5rem;
-      letter-spacing: -0.01em;
-    }}
-    p.meta {{
-      margin: 0;
-      color: #a0a0a0;
-      font-size: 0.95rem;
-    }}
+    header {{ max-width: 1200px; margin: 0 auto 2rem; }}
+    h1 {{ margin: 0 0 .5rem; font-size: 2.5rem; letter-spacing: -.01em; }}
+    p.meta {{ margin: 0; color: #a0a0a0; font-size: .95rem; }}
     .grid {{
-      display: grid;
-      gap: 1.5rem;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      justify-content: center;
-      max-width: 1400px;
-      margin: 0 auto;
+      display: grid; gap: 1.25rem;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      max-width: 1400px; margin: 0 auto;
     }}
-    .card {{
-      background: #151515;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
-      display: flex;
-      flex-direction: column;
-      transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-      max-width: 300px;
-      width: 100%;
-      margin: 0 auto;
+    /* Card */
+    .report-card {{
+      background: #111; border: 1px solid #1e1e1e; border-radius: 10px;
+      display: flex; flex-direction: column; overflow: hidden;
+      max-width: 300px; width: 100%; margin: 0 auto;
     }}
-    .card:hover {{
-      transform: translateY(-6px);
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+    /* Image area */
+    .card-image-wrap {{
+      position: relative; aspect-ratio: 1; overflow: hidden; flex-shrink: 0;
+      background: #1a1a1a;
     }}
-    .cover {{
-      background: rgba(255, 255, 255, 0.06);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 300px;
+    .card-image-wrap img {{ width: 100%; height: 100%; object-fit: cover; display: block; }}
+    .cover-placeholder {{
+      width: 100%; height: 100%; display: flex;
+      align-items: center; justify-content: center;
+      color: #333; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
     }}
-    .cover img {{
-      width: 100%;
-      height: auto;
-      display: block;
-      object-fit: cover;
-    }}
-    .cover.placeholder {{
-      color: #666;
-      font-size: 0.9rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }}
-    .info {{
-      padding: 1rem 1.2rem 1.4rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }}
-    .title-block {{
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.75rem;
-    }}
-    .title-text {{
-      flex: 1;
-      min-width: 0;
-    }}
-    .title-text h2 {{
-      margin: 0 0 0.3rem;
-      font-size: 1.1rem;
-      line-height: 1.3;
-      font-weight: 700;
-    }}
-    .title-text h2 a {{
-      color: #f3f3f3;
-      text-decoration: none;
-    }}
-    .title-text h2 a:hover {{
-      color: #7dd6ff;
-    }}
-    .album-line {{
-      margin: 0 0 0.3rem;
-      font-size: 0.88rem;
-      color: #c8c8c8;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }}
-    .album-line .plays {{
-      margin-left: 0.4rem;
-      color: #888;
-      font-size: 0.8rem;
-    }}
-    .album-line.no-album {{
-      color: #666;
-      font-style: italic;
-    }}
-    .similar-to {{
-      margin: 0;
-      font-size: 0.78rem;
-      color: #7dd6ff;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }}
+    /* Score badge */
     .score-badge {{
-      flex-shrink: 0;
-      background: rgba(125, 214, 255, 0.15);
-      border: 1px solid rgba(125, 214, 255, 0.35);
-      border-radius: 10px;
-      color: #7dd6ff;
-      font-size: 0.78rem;
-      font-weight: 700;
-      padding: 0.25rem 0.5rem;
-      white-space: nowrap;
+      position: absolute; top: .45rem; right: .45rem;
+      background: rgba(0,0,0,.75); border: 1px solid #2a2a2a;
+      border-radius: 5px; padding: .15rem .45rem;
+      font-size: .7rem; font-weight: 700; color: #4ade80;
     }}
-    .links {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.5rem;
+    /* Streaming overlay */
+    .stream-icons {{
+      position: absolute; bottom: .6rem; left: 50%; transform: translateX(-50%);
+      display: flex; gap: .45rem; opacity: 0; pointer-events: none;
+      transition: opacity .15s;
     }}
-    .links a {{
-      color: #0b0b0b;
-      background: #7dd6ff;
-      border-radius: 12px;
-      padding: 0.5rem 0.75rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: background 0.2s ease-in-out;
-      text-align: center;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.88rem;
+    .card-image-wrap:hover:not(.player-open) .stream-icons {{ opacity: 1; pointer-events: auto; }}
+    .stream-btn {{
+      width: 2.25rem; height: 2.25rem; border-radius: 50%;
+      background: rgba(0,0,0,.7); border: 1px solid rgba(255,255,255,.12);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background .12s, transform .12s;
     }}
-    .links a:hover {{
-      background: #54b8e3;
+    .stream-btn:hover {{ background: rgba(0,0,0,.9); transform: scale(1.08); }}
+    .stream-btn[data-service=apple]   {{ color: #fc3c44; }}
+    .stream-btn[data-service=spotify] {{ color: #1DB954; }}
+    .stream-btn[data-service=youtube] {{ color: #FF0000; }}
+    @keyframes shake {{ 0%,100%{{transform:none}} 25%{{transform:translateX(-3px)}} 75%{{transform:translateX(3px)}} }}
+    .stream-btn.not-found {{ animation: shake .3s; }}
+    /* Player overlay */
+    .card-player {{
+      display: none; position: absolute; inset: 0;
+      background: #0a0a0a; z-index: 10;
     }}
+    .card-image-wrap.player-open .card-player {{ display: block; }}
+    .card-image-wrap.player-open {{ aspect-ratio: unset; }}
+    .card-image-wrap.player-apple   {{ height: 460px; }}
+    .card-image-wrap.player-spotify {{ height: 200px; }}
+    .card-image-wrap.player-youtube {{ height: 220px; }}
+    .card-player iframe {{ width: 100%; height: 100%; border: none; overflow: hidden; }}
+    .player-close {{
+      position: absolute; top: .4rem; right: .4rem; z-index: 11;
+      width: 1.6rem; height: 1.6rem; border-radius: 50%;
+      background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.15);
+      color: #ccc; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }}
+    /* Card body */
+    .card-body {{ padding: .65rem .9rem .5rem; flex: 1; }}
+    .card-artist {{
+      color: #7dd6ff; font-size: .88rem; font-weight: 600;
+      text-decoration: none; display: block;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }}
+    .card-artist:hover {{ text-decoration: underline; }}
+    .card-album {{
+      color: #e0e0e0; font-size: .82rem; margin-top: .15rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }}
+    .card-meta {{ color: #555; font-size: .75rem; margin-top: .15rem; }}
+    .similar-to {{
+      color: #7dd6ff; font-size: .73rem; margin-top: .25rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }}
+    /* Action area */
+    .card-actions {{
+      display: flex; flex-direction: column; gap: .4rem;
+      padding: .55rem .9rem .75rem;
+      border-top: 1px solid #1a1a1a; margin-top: auto;
+    }}
+    .card-links {{ display: flex; gap: .3rem; }}
+    .link-btn {{
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 1.75rem; height: 1.75rem; border-radius: 5px;
+      background: #1a1a1a; border: 1px solid #252525; color: #555;
+      text-decoration: none; flex-shrink: 0; transition: background .12s, color .12s;
+    }}
+    .link-btn:hover {{ background: #242424; color: #bbb; border-color: #333; }}
+    .card-action-row {{ display: flex; gap: .35rem; align-items: center; }}
+    .action-btn {{
+      display: inline-flex; align-items: center; gap: .3rem;
+      padding: .3rem .6rem; border-radius: 5px;
+      background: #1a1a1a; border: 1px solid #252525; color: #777;
+      font-size: .72rem; font-weight: 500; cursor: pointer; font-family: inherit;
+      transition: background .12s, color .12s;
+    }}
+    .action-btn:hover {{ background: #242424; color: #ccc; border-color: #333; }}
+    .btn-slskd.queued {{ color: #4ade80 !important; border-color: #143320 !important; }}
+    .btn-slskd.err    {{ color: #f87171 !important; border-color: #4a1515 !important; }}
+    /* Toast */
+    #toast-container {{
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      display: flex; flex-direction: column; gap: .5rem; z-index: 9999;
+    }}
+    @keyframes slideIn {{ from{{transform:translateX(1.5rem);opacity:0}} to{{transform:none;opacity:1}} }}
+    .toast {{
+      padding: .55rem 1rem; border-radius: 7px; font-size: .8rem;
+      border: 1px solid #252525; color: #ccc; background: #1a1a1a;
+      animation: slideIn .2s ease;
+    }}
+    .toast-ok  {{ border-color: #143320; color: #4ade80; }}
+    .toast-err {{ border-color: #4a1515; color: #f87171; }}
   </style>
 </head>
 <body>
+  <div id="toast-container"></div>
   <header>
     <h1>Discover Similar Artists</h1>
     <p class="meta">Generated {timestamp} · {len(suggestions)} suggestion(s) across {total_artists} artist(s) scanned</p>
@@ -590,6 +624,74 @@ def render_html(
   <section class="grid">
     {cards_html}
   </section>
+  <script>
+    function streamCard(btn) {{
+      const wrap = btn.closest('.card-image-wrap');
+      if (wrap.classList.contains('player-open')) {{
+        const active = wrap.querySelector('.stream-btn.active');
+        if (active === btn) {{ _closeActivePlayer(wrap); return; }}
+        _closeActivePlayer(wrap);
+      }}
+      const artist = wrap.dataset.artist, album = wrap.dataset.album;
+      const service = btn.dataset.service;
+      btn.style.opacity = '.4';
+      fetch('/api/stream-info?artist=' + encodeURIComponent(artist) +
+            '&album=' + encodeURIComponent(album) + '&service=' + service)
+        .then(r => r.json())
+        .then(data => {{
+          btn.style.opacity = '';
+          if (!data.embed_url) {{
+            btn.classList.add('not-found');
+            setTimeout(() => btn.classList.remove('not-found'), 1500);
+            return;
+          }}
+          wrap.classList.add('player-open', 'player-' + service);
+          btn.classList.add('active');
+          wrap.querySelector('iframe').src = data.embed_url;
+        }})
+        .catch(() => {{ btn.style.opacity = ''; }});
+    }}
+    function closePlayer(closeBtn) {{ _closeActivePlayer(closeBtn.closest('.card-image-wrap')); }}
+    function _closeActivePlayer(wrap) {{
+      const iframe = wrap.querySelector('iframe');
+      if (iframe) {{ iframe.src = ''; }}
+      wrap.classList.remove('player-open', 'player-apple', 'player-spotify', 'player-youtube');
+      wrap.querySelectorAll('.stream-btn.active').forEach(b => b.classList.remove('active'));
+    }}
+    function copyText(text) {{
+      if (navigator.clipboard) {{ navigator.clipboard.writeText(text).catch(() => {{}}); return; }}
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta);
+    }}
+    function sendToSlskd(btn) {{
+      const artist = btn.dataset.artist, album = btn.dataset.album;
+      btn.disabled = true;
+      fetch('/api/slskd-search', {{
+        method: 'POST', headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{artist, album}})
+      }})
+      .then(r => {{ if (!r.ok) throw r; return r.json(); }})
+      .then(() => {{
+        btn.classList.add('queued');
+        showToast('Queued: ' + artist + ' \u2014 ' + album, 'ok');
+        setTimeout(() => btn.classList.remove('queued'), 2000);
+      }})
+      .catch(() => {{
+        btn.classList.add('err');
+        showToast('SLSKD search failed', 'err');
+        setTimeout(() => btn.classList.remove('err'), 2000);
+      }})
+      .finally(() => {{ btn.disabled = false; }});
+    }}
+    function showToast(msg, type) {{
+      const el = document.createElement('div');
+      el.className = 'toast toast-' + type; el.textContent = msg;
+      document.getElementById('toast-container').appendChild(el);
+      setTimeout(() => el.remove(), 3500);
+    }}
+  </script>
 </body>
 </html>
 """
@@ -759,8 +861,8 @@ async def main() -> None:
             except Exception:
                 logging.warning("Could not read dismissed file %s", dismissed_path, exc_info=True)
 
-        # --- Phase A.5: tag-based genre filter --------------------------------
-        if DISCOVER_TAG_OVERLAP > 0 and candidates:
+        # --- Phase A.5: tag-based genre filter / re-score ---------------------
+        if candidates and (DISCOVER_TAG_OVERLAP > 0 or DISCOVER_SIMILARITY_MODE == "tags"):
             all_names: set[str] = {s.candidate_display for s in candidates.values()}
             for s in candidates.values():
                 all_names.update(s.source_artists)
@@ -796,15 +898,45 @@ async def main() -> None:
                     for s in sources
                 )
 
+            def jaccard_tag_score(candidate_display: str, sources: list[str]) -> float:
+                """Mean Jaccard tag similarity between candidate and each source artist (0.0–1.0)."""
+                cand_tags = {
+                    t for t in tag_cache.get(normalize_text(candidate_display), [])
+                    if t not in IGNORED_TAGS
+                }
+                scores = []
+                for source in sources:
+                    src_tags = {
+                        t for t in tag_cache.get(normalize_text(source), [])
+                        if t not in IGNORED_TAGS
+                    }
+                    union = cand_tags | src_tags
+                    if union:
+                        scores.append(len(cand_tags & src_tags) / len(union))
+                return sum(scores) / len(scores) if scores else 0.0
+
             before = len(candidates)
-            candidates = {
-                k: v for k, v in candidates.items()
-                if tags_overlap(v.candidate_display, v.source_artists)
-            }
-            logging.info(
-                "Phase A.5 complete — %d/%d candidates kept after tag filter (overlap≥%d).",
-                len(candidates), before, DISCOVER_TAG_OVERLAP,
-            )
+            if DISCOVER_SIMILARITY_MODE == "tags":
+                # Hard-exclude zero-overlap matches; re-score by Jaccard similarity
+                candidates = {
+                    k: v for k, v in candidates.items()
+                    if jaccard_tag_score(v.candidate_display, v.source_artists) > 0.0
+                }
+                for sug in candidates.values():
+                    sug.similarity_score = jaccard_tag_score(sug.candidate_display, sug.source_artists)
+                logging.info(
+                    "Phase A.5 complete — %d/%d candidates kept after genre re-scoring (tags mode).",
+                    len(candidates), before,
+                )
+            else:
+                candidates = {
+                    k: v for k, v in candidates.items()
+                    if tags_overlap(v.candidate_display, v.source_artists)
+                }
+                logging.info(
+                    "Phase A.5 complete — %d/%d candidates kept after tag filter (overlap≥%d).",
+                    len(candidates), before, DISCOVER_TAG_OVERLAP,
+                )
 
         # --- Phase B: enrich with top album ----------------------------------
         candidate_list = list(candidates.values())

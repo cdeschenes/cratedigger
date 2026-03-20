@@ -6,6 +6,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-03-19
+
+### Added
+
+- **`DISCOVER_SIMILARITY_MODE`** env var — `tags` mode re-scores similar artist candidates
+  using Jaccard genre-tag similarity instead of Last.fm's shared-listener score, and drops
+  zero-overlap matches to eliminate cross-genre mismatches (e.g. ambient matched with hip-hop)
+- Standalone HTML reports (`missing_popular_albums.html`, `discover_similar_artists.html`)
+  now have full card UI parity with the webapp viewer: hover-to-reveal streaming icons
+  (Apple Music, Spotify, YouTube), embedded player overlay, two-row action bar with
+  icon-only external links plus Copy and SLSKD buttons, and toast notifications
+- Help page "Card Reference" section with a live-rendered card anatomy diagram, streaming
+  service icon guide with brand colors, external link descriptions, and action button guide
+- Dashboard "Last run" timestamps now format to a human-readable locale string on page load
+  (previously displayed as raw ISO 8601)
+
+### Changed
+
+- Project rebranded from "Music Reports" to **Cratedigger**
+- In `tags` mode, similar artist candidates are re-scored using weighted Jaccard similarity
+  instead of the raw Last.fm `match` value; the Jaccard score becomes the `similarity_score`
+
 ## [1.0.0] - 2026-03-19
 
 ### Added

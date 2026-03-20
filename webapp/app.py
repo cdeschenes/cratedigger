@@ -167,7 +167,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Music Reports",
+    title="Cratedigger",
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,

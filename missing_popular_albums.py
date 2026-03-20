@@ -828,47 +828,96 @@ def has_album_cross_artist(
     return False
 
 
-def build_card_html(suggestion: AlbumSuggestion) -> str:
-    artist_escaped = html.escape(suggestion.artist_display)
-    album_escaped = html.escape(suggestion.album_title)
+def build_card_html(suggestion: AlbumSuggestion, slskd_enabled: bool = False) -> str:
+    artist_esc = html.escape(suggestion.artist_display)
+    album_esc = html.escape(suggestion.album_title)
     query = f"{suggestion.artist_display} {suggestion.album_title}"
     query_encoded = url_quote(query)
     discogs_url = f"https://www.discogs.com/search/?q={query_encoded}&type=release"
     bandcamp_url = f"https://bandcamp.com/search?q={query_encoded}"
     yt_url = f"https://music.youtube.com/search?q={query_encoded}"
-    lastfm_url = suggestion.lastfm_url or discogs_url
-    copy_payload = html.escape(f"{suggestion.artist_display} {suggestion.album_title}")
-    aria_copy = html.escape(
-        f"Copy {suggestion.artist_display} {suggestion.album_title} to clipboard"
-    )
+    lastfm_url = html.escape(suggestion.lastfm_url or discogs_url)
+    copy_text = html.escape(f"{suggestion.artist_display} {suggestion.album_title}", quote=True)
+    year = suggestion.release_year or ""
+    playcount = f"{suggestion.playcount:,}" if suggestion.playcount else "—"
+    meta = f"{year} · {playcount} plays" if year else f"{playcount} plays"
     if suggestion.image_url:
         cover_html = (
-            f'<div class="cover">'
             f'<img src="{html.escape(suggestion.image_url)}" '
-            f'alt="{album_escaped} cover art for {artist_escaped}" loading="lazy"></div>'
+            f'alt="{album_esc} cover" loading="lazy">'
         )
     else:
-        cover_html = '<div class="cover placeholder">No Artwork</div>'
+        cover_html = '<div class="cover-placeholder">No Artwork</div>'
+    slskd_btn = (
+        f'<button class="action-btn btn-slskd" data-artist="{artist_esc}" data-album="{album_esc}"'
+        f' onclick="sendToSlskd(this)" title="Search on SLSKD">'
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16'
+        'c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5z'
+        'm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>'
+        '</svg> SLSKD</button>'
+    ) if slskd_enabled else ""
     return (
-        "<article class=\"card\">"
-        f"{cover_html}"
-        "<div class=\"info\">"
-        "<div class=\"title-block\">"
-        f"<div class=\"title-text\"><h2>{album_escaped}</h2><span>{artist_escaped}</span></div>"
-        f"<button class=\"copy-btn\" type=\"button\" data-copy=\"{copy_payload}\" aria-label=\"{aria_copy}\">"
-        "<svg viewBox=\"0 0 24 24\" role=\"img\" aria-hidden=\"true\">"
-        "<path d=\"M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z\" fill=\"currentColor\"/>"
-        "</svg>"
-        "</button>"
-        "</div>"
-        "<div class=\"links\">"
-        f"<a href=\"{html.escape(lastfm_url)}\" target=\"_blank\" rel=\"noopener noreferrer\">Last.fm</a>"
-        f"<a href=\"{discogs_url}\" target=\"_blank\" rel=\"noopener noreferrer\">Discogs</a>"
-        f"<a href=\"{bandcamp_url}\" target=\"_blank\" rel=\"noopener noreferrer\">Bandcamp</a>"
-        f"<a href=\"{yt_url}\" target=\"_blank\" rel=\"noopener noreferrer\">YouTube Music</a>"
-        "</div>"
-        "</div>"
-        "</article>"
+        '<article class="report-card">'
+        f'<div class="card-image-wrap" data-artist="{artist_esc}" data-album="{album_esc}">'
+        f'{cover_html}'
+        '<div class="stream-icons">'
+        '<button class="stream-btn" data-service="apple" onclick="streamCard(this)" title="Apple Music">'
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4'
+        ' 4-1.79 4-4V7h4V3h-6z"/></svg></button>'
+        '<button class="stream-btn" data-service="spotify" onclick="streamCard(this)" title="Spotify">'
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M17.9 10.9C14.7 9 9.35 8.8 6.3 9.75c-.5.15-1-.15-1.15-.6-.15-.5.15-1 .6-1.15'
+        ' 3.55-1.05 9.4-.85 13.1 1.35.45.25.6.85.35 1.3-.25.35-.85.5-1.3.25z'
+        'm-.1 2.8c-.25.35-.7.5-1.05.25-2.7-1.65-6.8-2.15-9.95-1.15-.4.1-.85-.1-.95-.5'
+        '-.1-.4.1-.85.5-.95 3.65-1.1 8.15-.55 11.25 1.35.3.15.45.65.2 1z'
+        'm-1.2 2.75c-.2.3-.55.4-.85.2-2.35-1.45-5.3-1.75-8.8-.95-.35.1-.65-.15-.75-.45'
+        '-.1-.35.15-.65.45-.75 3.8-.85 7.1-.5 9.7 1.1.35.2.4.55.25.85z"/>'
+        '</svg></button>'
+        '<button class="stream-btn" data-service="youtube" onclick="streamCard(this)" title="YouTube">'
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M8 5v14l11-7z"/></svg></button>'
+        '</div>'
+        '<div class="card-player">'
+        '<button class="player-close" onclick="closePlayer(this)">'
+        '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">'
+        '<path d="M18 6L6 18M6 6l12 12"/></svg></button>'
+        '<iframe frameborder="0" allowfullscreen allow="autoplay; encrypted-media"></iframe>'
+        '</div>'
+        '</div>'
+        '<div class="card-body">'
+        f'<a class="card-artist" href="{lastfm_url}" target="_blank" rel="noopener">{artist_esc}</a>'
+        f'<div class="card-album">{album_esc}</div>'
+        f'<div class="card-meta">{meta}</div>'
+        '</div>'
+        '<div class="card-actions">'
+        '<div class="card-links">'
+        f'<a class="link-btn" href="{lastfm_url}" target="_blank" rel="noopener" title="Last.fm">'
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4'
+        ' 4-1.79 4-4V7h4V3h-6z"/></svg></a>'
+        f'<a class="link-btn" href="{discogs_url}" target="_blank" rel="noopener" title="Discogs">'
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+        '<circle cx="12" cy="12" r="9"/>'
+        '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg></a>'
+        f'<a class="link-btn" href="{bandcamp_url}" target="_blank" rel="noopener" title="Bandcamp">'
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg></a>'
+        f'<a class="link-btn" href="{yt_url}" target="_blank" rel="noopener" title="YouTube Music">'
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M8 5v14l11-7z"/></svg></a>'
+        '</div>'
+        '<div class="card-action-row">'
+        f'<button class="action-btn" onclick="copyText(\'{copy_text}\')" title="Copy artist &amp; album">'
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">'
+        '<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14'
+        'c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>'
+        '</svg> Copy</button>'
+        f'{slskd_btn}'
+        '</div>'
+        '</div>'
+        '</article>'
     )
 
 
@@ -877,167 +926,138 @@ def render_html(
 ) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     total_suggestions = len(suggestions)
-    cards_html = "\n    ".join(build_card_html(item) for item in suggestions)
+    slskd_enabled = bool(CONFIG.get("SLSKD_URL"))
+    cards_html = "\n    ".join(build_card_html(item, slskd_enabled) for item in suggestions)
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Missing Popular Albums</title>
   <style>
-    :root {{
-      color-scheme: dark;
-    }}
-    * {{
-      box-sizing: border-box;
-    }}
+    :root {{ color-scheme: dark; }}
+    *, *::before, *::after {{ box-sizing: border-box; }}
     body {{
-      margin: 0;
-      padding: 2rem;
+      margin: 0; padding: 2rem;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0a0a0a;
-      color: #f3f3f3;
+      background: #0a0a0a; color: #f3f3f3;
     }}
-    header {{
-      max-width: 1200px;
-      margin: 0 auto 2rem;
-    }}
-    h1 {{
-      margin: 0 0 0.5rem;
-      font-size: 2.5rem;
-      letter-spacing: -0.01em;
-    }}
-    p.meta {{
-      margin: 0;
-      color: #a0a0a0;
-      font-size: 0.95rem;
-    }}
+    header {{ max-width: 1200px; margin: 0 auto 2rem; }}
+    h1 {{ margin: 0 0 .5rem; font-size: 2.5rem; letter-spacing: -.01em; }}
+    p.meta {{ margin: 0; color: #a0a0a0; font-size: .95rem; }}
     .grid {{
-      display: grid;
-      gap: 1.5rem;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      justify-content: center;
-      max-width: 1400px;
-      margin: 0 auto;
+      display: grid; gap: 1.25rem;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      max-width: 1400px; margin: 0 auto;
     }}
-    .card {{
-      background: #151515;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
-      display: flex;
-      flex-direction: column;
-      transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-      max-width: 300px;
-      width: 100%;
-      margin: 0 auto;
+    /* Card */
+    .report-card {{
+      background: #111; border: 1px solid #1e1e1e; border-radius: 10px;
+      display: flex; flex-direction: column; overflow: hidden;
+      max-width: 300px; width: 100%; margin: 0 auto;
     }}
-    .card:hover {{
-      transform: translateY(-6px);
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+    /* Image area */
+    .card-image-wrap {{
+      position: relative; aspect-ratio: 1; overflow: hidden; flex-shrink: 0;
+      background: #1a1a1a;
     }}
-    .cover {{
-      background: rgba(255, 255, 255, 0.06);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 300px;
+    .card-image-wrap img {{ width: 100%; height: 100%; object-fit: cover; display: block; }}
+    .cover-placeholder {{
+      width: 100%; height: 100%; display: flex;
+      align-items: center; justify-content: center;
+      color: #333; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
     }}
-    .cover img {{
-      width: 100%;
-      height: auto;
-      display: block;
-      object-fit: cover;
+    /* Streaming overlay */
+    .stream-icons {{
+      position: absolute; bottom: .6rem; left: 50%; transform: translateX(-50%);
+      display: flex; gap: .45rem; opacity: 0; pointer-events: none;
+      transition: opacity .15s;
     }}
-    .cover.placeholder {{
-      color: #666;
-      font-size: 0.9rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+    .card-image-wrap:hover:not(.player-open) .stream-icons {{ opacity: 1; pointer-events: auto; }}
+    .stream-btn {{
+      width: 2.25rem; height: 2.25rem; border-radius: 50%;
+      background: rgba(0,0,0,.7); border: 1px solid rgba(255,255,255,.12);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background .12s, transform .12s;
     }}
-    .info {{
-      padding: 1rem 1.2rem 1.4rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.9rem;
+    .stream-btn:hover {{ background: rgba(0,0,0,.9); transform: scale(1.08); }}
+    .stream-btn[data-service=apple]   {{ color: #fc3c44; }}
+    .stream-btn[data-service=spotify] {{ color: #1DB954; }}
+    .stream-btn[data-service=youtube] {{ color: #FF0000; }}
+    @keyframes shake {{ 0%,100%{{transform:none}} 25%{{transform:translateX(-3px)}} 75%{{transform:translateX(3px)}} }}
+    .stream-btn.not-found {{ animation: shake .3s; }}
+    /* Player overlay */
+    .card-player {{
+      display: none; position: absolute; inset: 0;
+      background: #0a0a0a; z-index: 10;
     }}
-    .title-block {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.75rem;
+    .card-image-wrap.player-open .card-player {{ display: block; }}
+    .card-image-wrap.player-open {{ aspect-ratio: unset; }}
+    .card-image-wrap.player-apple   {{ height: 460px; }}
+    .card-image-wrap.player-spotify {{ height: 200px; }}
+    .card-image-wrap.player-youtube {{ height: 220px; }}
+    .card-player iframe {{ width: 100%; height: 100%; border: none; overflow: hidden; }}
+    .player-close {{
+      position: absolute; top: .4rem; right: .4rem; z-index: 11;
+      width: 1.6rem; height: 1.6rem; border-radius: 50%;
+      background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.15);
+      color: #ccc; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
     }}
-    .title-text {{
-      flex: 1;
-      min-width: 0;
+    /* Card body */
+    .card-body {{ padding: .65rem .9rem .5rem; flex: 1; }}
+    .card-artist {{
+      color: #7dd6ff; font-size: .88rem; font-weight: 600;
+      text-decoration: none; display: block;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }}
-    .title-text h2 {{
-      margin: 0;
-      font-size: 1.1rem;
-      line-height: 1.35;
-      font-weight: 600;
-      word-break: break-word;
+    .card-artist:hover {{ text-decoration: underline; }}
+    .card-album {{
+      color: #e0e0e0; font-size: .82rem; margin-top: .15rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }}
-    .title-text span {{
-      display: block;
-      color: #7dd6ff;
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin-top: 0.25rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .card-meta {{ color: #555; font-size: .75rem; margin-top: .15rem; }}
+    /* Action area */
+    .card-actions {{
+      display: flex; flex-direction: column; gap: .4rem;
+      padding: .55rem .9rem .75rem;
+      border-top: 1px solid #1a1a1a; margin-top: auto;
     }}
-    .copy-btn {{
-      background: rgba(125, 214, 255, 0.18);
-      border: 1px solid rgba(125, 214, 255, 0.35);
-      border-radius: 12px;
-      color: #7dd6ff;
-      padding: 0.35rem;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: background 0.2s ease-in-out, border-color 0.2s ease-in-out, color 0.2s ease-in-out;
-      flex-shrink: 0;
+    .card-links {{ display: flex; gap: .3rem; }}
+    .link-btn {{
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 1.75rem; height: 1.75rem; border-radius: 5px;
+      background: #1a1a1a; border: 1px solid #252525; color: #555;
+      text-decoration: none; flex-shrink: 0; transition: background .12s, color .12s;
     }}
-    .copy-btn:hover,
-    .copy-btn.copied {{
-      background: rgba(84, 184, 227, 0.45);
-      border-color: #7dd6ff;
-      color: #0b0b0b;
+    .link-btn:hover {{ background: #242424; color: #bbb; border-color: #333; }}
+    .card-action-row {{ display: flex; gap: .35rem; align-items: center; }}
+    .action-btn {{
+      display: inline-flex; align-items: center; gap: .3rem;
+      padding: .3rem .6rem; border-radius: 5px;
+      background: #1a1a1a; border: 1px solid #252525; color: #777;
+      font-size: .72rem; font-weight: 500; cursor: pointer; font-family: inherit;
+      transition: background .12s, color .12s;
     }}
-    .copy-btn:focus-visible {{
-      outline: 2px solid #7dd6ff;
-      outline-offset: 2px;
+    .action-btn:hover {{ background: #242424; color: #ccc; border-color: #333; }}
+    .btn-slskd.queued {{ color: #4ade80 !important; border-color: #143320 !important; }}
+    .btn-slskd.err    {{ color: #f87171 !important; border-color: #4a1515 !important; }}
+    /* Toast */
+    #toast-container {{
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      display: flex; flex-direction: column; gap: .5rem; z-index: 9999;
     }}
-    .copy-btn svg {{
-      width: 18px;
-      height: 18px;
+    @keyframes slideIn {{ from{{transform:translateX(1.5rem);opacity:0}} to{{transform:none;opacity:1}} }}
+    .toast {{
+      padding: .55rem 1rem; border-radius: 7px; font-size: .8rem;
+      border: 1px solid #252525; color: #ccc; background: #1a1a1a;
+      animation: slideIn .2s ease;
     }}
-    .links {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.5rem;
-    }}
-    .links a {{
-      color: #0b0b0b;
-      background: #7dd6ff;
-      border-radius: 12px;
-      padding: 0.5rem 0.75rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: background 0.2s ease-in-out;
-      text-align: center;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }}
-    .links a:hover {{
-      background: #54b8e3;
-    }}
+    .toast-ok  {{ border-color: #143320; color: #4ade80; }}
+    .toast-err {{ border-color: #4a1515; color: #f87171; }}
   </style>
 </head>
 <body>
+  <div id="toast-container"></div>
   <header>
     <h1>Missing Popular Albums</h1>
     <p class="meta">Generated {timestamp} · {total_suggestions} suggestion(s) across {total_artists} artist(s)</p>
@@ -1046,60 +1066,72 @@ def render_html(
     {cards_html}
   </section>
   <script>
-    function markCopied(button) {{
-      if (!button) {{
-        return;
+    function streamCard(btn) {{
+      const wrap = btn.closest('.card-image-wrap');
+      if (wrap.classList.contains('player-open')) {{
+        const active = wrap.querySelector('.stream-btn.active');
+        if (active === btn) {{ _closeActivePlayer(wrap); return; }}
+        _closeActivePlayer(wrap);
       }}
-      button.classList.add('copied');
-      setTimeout(function () {{
-        button.classList.remove('copied');
-      }}, 1200);
-    }}
-
-    function fallbackCopy(text, button) {{
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.setAttribute('readonly', '');
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      textarea.style.pointerEvents = 'none';
-      textarea.style.top = '-1000px';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      try {{
-        if (document.execCommand('copy')) {{
-          markCopied(button);
-        }}
-      }} catch (error) {{
-        console.warn('Clipboard copy failed', error);
-      }} finally {{
-        document.body.removeChild(textarea);
-      }}
-    }}
-
-    document.addEventListener('click', function (event) {{
-      const button = event.target.closest('.copy-btn');
-      if (!button) {{
-        return;
-      }}
-      const text = button.getAttribute('data-copy');
-      if (!text) {{
-        return;
-      }}
-      if (navigator.clipboard && navigator.clipboard.writeText) {{
-        navigator.clipboard.writeText(text).then(
-          function () {{
-            markCopied(button);
-          }},
-          function () {{
-            fallbackCopy(text, button);
+      const artist = wrap.dataset.artist, album = wrap.dataset.album;
+      const service = btn.dataset.service;
+      btn.style.opacity = '.4';
+      fetch('/api/stream-info?artist=' + encodeURIComponent(artist) +
+            '&album=' + encodeURIComponent(album) + '&service=' + service)
+        .then(r => r.json())
+        .then(data => {{
+          btn.style.opacity = '';
+          if (!data.embed_url) {{
+            btn.classList.add('not-found');
+            setTimeout(() => btn.classList.remove('not-found'), 1500);
+            return;
           }}
-        );
-      }} else {{
-        fallbackCopy(text, button);
-      }}
-    }});
+          wrap.classList.add('player-open', 'player-' + service);
+          btn.classList.add('active');
+          wrap.querySelector('iframe').src = data.embed_url;
+        }})
+        .catch(() => {{ btn.style.opacity = ''; }});
+    }}
+    function closePlayer(closeBtn) {{ _closeActivePlayer(closeBtn.closest('.card-image-wrap')); }}
+    function _closeActivePlayer(wrap) {{
+      const iframe = wrap.querySelector('iframe');
+      if (iframe) {{ iframe.src = ''; }}
+      wrap.classList.remove('player-open', 'player-apple', 'player-spotify', 'player-youtube');
+      wrap.querySelectorAll('.stream-btn.active').forEach(b => b.classList.remove('active'));
+    }}
+    function copyText(text) {{
+      if (navigator.clipboard) {{ navigator.clipboard.writeText(text).catch(() => {{}}); return; }}
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta);
+    }}
+    function sendToSlskd(btn) {{
+      const artist = btn.dataset.artist, album = btn.dataset.album;
+      btn.disabled = true;
+      fetch('/api/slskd-search', {{
+        method: 'POST', headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{artist, album}})
+      }})
+      .then(r => {{ if (!r.ok) throw r; return r.json(); }})
+      .then(() => {{
+        btn.classList.add('queued');
+        showToast('Queued: ' + artist + ' \u2014 ' + album, 'ok');
+        setTimeout(() => btn.classList.remove('queued'), 2000);
+      }})
+      .catch(() => {{
+        btn.classList.add('err');
+        showToast('SLSKD search failed', 'err');
+        setTimeout(() => btn.classList.remove('err'), 2000);
+      }})
+      .finally(() => {{ btn.disabled = false; }});
+    }}
+    function showToast(msg, type) {{
+      const el = document.createElement('div');
+      el.className = 'toast toast-' + type; el.textContent = msg;
+      document.getElementById('toast-container').appendChild(el);
+      setTimeout(() => el.remove(), 3500);
+    }}
   </script>
 </body>
 </html>

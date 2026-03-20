@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Run Dashboard — Music Reports{% endblock %}
+{% block title %}Run Dashboard — Cratedigger{% endblock %}
 {% block nav_active_dashboard %}active{% endblock %}
 
 {% block head_css %}
@@ -165,7 +165,7 @@
       <div class="meta">
         <span>
           <label>Last run</label>
-          <span id="last-run-{{ job_id }}">{{ job.finished_at or "Never" }}</span>
+          <span id="last-run-{{ job_id }}" data-iso="{{ job.finished_at or '' }}">{{ job.finished_at or "Never" }}</span>
         </span>
         {% if next_run %}
         <span>
@@ -231,6 +231,13 @@
     if (!iso) return "—";
     try { return new Date(iso).toLocaleString(); } catch { return iso; }
   }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-iso]').forEach(el => {
+      const iso = el.dataset.iso;
+      if (iso) el.textContent = formatDate(iso);
+    });
+  });
 
   function showToast(msg) {
     const t = document.getElementById("toasts");

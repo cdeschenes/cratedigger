@@ -15,6 +15,7 @@ __pycache__/
 
 # Generated output (written to /data in Docker; local runs produce these at root)
 /*.html
+/*.json
 *.log
 *.log.*
 output/

@@ -89,45 +89,45 @@
       {% endif %}
     </div>
     <div class="card-actions">
-      <a class="action-btn" href="{{ item.artist_lastfm_url or '#' }}" target="_blank" rel="noopener" title="Last.fm">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-        Last.fm
-      </a>
-      {% if item.top_album_title %}
-      <button class="action-btn"
-              data-copy="{{ item.candidate_display }} {{ item.top_album_title }}"
-              onclick="copyText(this.dataset.copy)" title="Copy artist &amp; album">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-        Copy
-      </button>
-      {% endif %}
-      <a class="action-btn" href="{{ item.discogs_url }}" target="_blank" rel="noopener" title="Discogs">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
-        Discogs
-      </a>
-      <a class="action-btn" href="{{ item.bandcamp_url }}" target="_blank" rel="noopener" title="Bandcamp">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg>
-        Bandcamp
-      </a>
-      <a class="action-btn" href="{{ item.youtube_url }}" target="_blank" rel="noopener" title="YouTube Music">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        YouTube
-      </a>
-      {% if slskd_enabled %}
-      <button class="action-btn btn-slskd"
-              data-artist="{{ item.candidate_display }}"
-              data-album="{{ item.top_album_title or '' }}"
-              onclick="sendToSlskd(this)" title="Search on SLSKD">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-        SLSKD
-      </button>
-      {% endif %}
-      <button class="action-btn btn-dismiss"
-              data-dismiss-type="discover"
-              data-dismiss-key="{{ item.candidate_normalized }}"
-              onclick="dismissCard(this)" title="Dismiss">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
+      <div class="card-links">
+        <a class="link-btn" href="{{ item.artist_lastfm_url or '#' }}" target="_blank" rel="noopener" title="Last.fm">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+        </a>
+        <a class="link-btn" href="{{ item.discogs_url }}" target="_blank" rel="noopener" title="Discogs">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+        </a>
+        <a class="link-btn" href="{{ item.bandcamp_url }}" target="_blank" rel="noopener" title="Bandcamp">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg>
+        </a>
+        <a class="link-btn" href="{{ item.youtube_url }}" target="_blank" rel="noopener" title="YouTube Music">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </a>
+      </div>
+      <div class="card-action-row">
+        {% if item.top_album_title %}
+        <button class="action-btn"
+                data-copy="{{ item.candidate_display }} {{ item.top_album_title }}"
+                onclick="copyText(this.dataset.copy)" title="Copy artist &amp; album">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          Copy
+        </button>
+        {% endif %}
+        {% if slskd_enabled %}
+        <button class="action-btn btn-slskd"
+                data-artist="{{ item.candidate_display }}"
+                data-album="{{ item.top_album_title or '' }}"
+                onclick="sendToSlskd(this)" title="Search on SLSKD">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          SLSKD
+        </button>
+        {% endif %}
+        <button class="action-btn btn-dismiss"
+                data-dismiss-type="discover"
+                data-dismiss-key="{{ item.candidate_normalized }}"
+                onclick="dismissCard(this)" title="Dismiss">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
     </div>
   </div>
   {% else %}
@@ -179,43 +179,43 @@
       <div class="card-playcount">{{ "{:,}".format(item.playcount) }} plays</div>
     </div>
     <div class="card-actions">
-      <a class="action-btn" href="{{ item.lastfm_url or '#' }}" target="_blank" rel="noopener" title="Last.fm">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-        Last.fm
-      </a>
-      <button class="action-btn"
-              data-copy="{{ item.artist_display }} {{ item.album_title }}"
-              onclick="copyText(this.dataset.copy)" title="Copy artist &amp; album">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-        Copy
-      </button>
-      <a class="action-btn" href="{{ item.discogs_url }}" target="_blank" rel="noopener" title="Discogs">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
-        Discogs
-      </a>
-      <a class="action-btn" href="{{ item.bandcamp_url }}" target="_blank" rel="noopener" title="Bandcamp">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg>
-        Bandcamp
-      </a>
-      <a class="action-btn" href="{{ item.youtube_url }}" target="_blank" rel="noopener" title="YouTube Music">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        YouTube
-      </a>
-      {% if slskd_enabled %}
-      <button class="action-btn btn-slskd"
-              data-artist="{{ item.artist_display }}"
-              data-album="{{ item.album_title }}"
-              onclick="sendToSlskd(this)" title="Search on SLSKD">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-        SLSKD
-      </button>
-      {% endif %}
-      <button class="action-btn btn-dismiss"
-              data-dismiss-type="missing"
-              data-dismiss-key="{{ item.artist_normalized }}|{{ item.album_normalized }}"
-              onclick="dismissCard(this)" title="Dismiss">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
+      <div class="card-links">
+        <a class="link-btn" href="{{ item.lastfm_url or '#' }}" target="_blank" rel="noopener" title="Last.fm">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+        </a>
+        <a class="link-btn" href="{{ item.discogs_url }}" target="_blank" rel="noopener" title="Discogs">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+        </a>
+        <a class="link-btn" href="{{ item.bandcamp_url }}" target="_blank" rel="noopener" title="Bandcamp">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg>
+        </a>
+        <a class="link-btn" href="{{ item.youtube_url }}" target="_blank" rel="noopener" title="YouTube Music">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </a>
+      </div>
+      <div class="card-action-row">
+        <button class="action-btn"
+                data-copy="{{ item.artist_display }} {{ item.album_title }}"
+                onclick="copyText(this.dataset.copy)" title="Copy artist &amp; album">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          Copy
+        </button>
+        {% if slskd_enabled %}
+        <button class="action-btn btn-slskd"
+                data-artist="{{ item.artist_display }}"
+                data-album="{{ item.album_title }}"
+                onclick="sendToSlskd(this)" title="Search on SLSKD">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          SLSKD
+        </button>
+        {% endif %}
+        <button class="action-btn btn-dismiss"
+                data-dismiss-type="missing"
+                data-dismiss-key="{{ item.artist_normalized }}|{{ item.album_normalized }}"
+                onclick="dismissCard(this)" title="Dismiss">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
     </div>
   </div>
   {% endif %}
