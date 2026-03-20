@@ -1,0 +1,35 @@
+services:
+  cratedigger:
+    build: .
+    container_name: cratedigger
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - cratedigger-data:/data
+      # Mount your local music folder read-only.
+      # If using Navidrome, you can omit this line.
+      # - /path/to/your/music:/music:ro
+    env_file: .env
+    environment:
+      # Output paths are pinned inside the /data volume — do not override these in .env
+      DATA_DIR: /data
+      HTML_OUT: /data/missing_popular_albums.html
+      DISCOVER_HTML_OUT: /data/discover_similar_artists.html
+      JSON_OUT: /data/missing_popular_albums.json
+      DISCOVER_JSON_OUT: /data/discover_similar_artists.json
+      CACHE_FILE: /data/.cache/lastfm_top_albums.json
+      DISCOVER_CACHE_FILE: /data/.cache/similar_artists.json
+      LOG_FILE: /data/missing_popular_albums.log
+      DISCOVER_LOG_FILE: /data/discover_similar_artists.log
+      DISMISSED_FILE: /data/dismissed.json
+      MUSIC_ROOT: /music
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  cratedigger-data:

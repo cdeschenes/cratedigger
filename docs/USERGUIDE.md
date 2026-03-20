@@ -111,6 +111,10 @@ If it scans artists, hits Last.fm, and writes an HTML file, you're good. The `--
 
 ## Setup — Docker
 
+<p align="center">
+  <img src="screenshots/login.png" alt="Cratedigger login page" width="360">
+</p>
+
 The compose file lives at `Docker/music-reports/docker-compose.yaml`. It builds the image from `Scripts/missing_popular_albums/`.
 
 ### 1. Create the Docker env file
@@ -232,6 +236,10 @@ How many candidates are collected per local artist before deduplication. The def
 ---
 
 ## Using the web dashboard
+
+<p align="center">
+  <img src="screenshots/RunDashboard.png" alt="Run Dashboard" width="640">
+</p>
 
 Open the dashboard at your configured domain (or `http://localhost:5099` for local access). You'll be prompted for HTTP Basic Auth credentials (`AUTH_USER` / `AUTH_PASS`).
 
@@ -357,6 +365,10 @@ Each card is one artist with at least one album gap, sorted alphabetically by ar
 The report header shows a timestamp and counts.
 
 ### Discover Similar Artists report
+
+<p align="center">
+  <img src="screenshots/Discover.png" alt="Discover Similar Artists report" width="640">
+</p>
 
 Cards are sorted by Last.fm similarity score descending — strongest matches first.
 

@@ -39,7 +39,12 @@
       margin-right: 1.5rem;
       white-space: nowrap;
     }
-    .nav-brand svg { color: #2563eb; flex-shrink: 0; }
+    .nav-logo-wrap {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      color: #fff;
+    }
 
     .nav-links {
       display: flex;
@@ -99,9 +104,13 @@
 <body>
   <nav class="topnav">
     <a class="nav-brand" href="/">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-      </svg>
+      <span class="nav-logo-wrap" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="12" cy="12" r="1.2"/>
+        </svg>
+      </span>
       Cratedigger
     </a>
     <div class="nav-links">

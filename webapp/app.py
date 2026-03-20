@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
@@ -41,7 +42,7 @@ from webapp.auth import NotAuthenticatedException, check_credentials, require_au
 from webapp.runner import get_all_status, get_status, run_job, stream_logs
 from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 ITEMS_PER_PAGE = 4
 
@@ -177,6 +178,7 @@ _secret_key = os.environ.get("SECRET_KEY") or _secrets_mod.token_hex(32)
 app.add_middleware(SessionMiddleware, secret_key=_secret_key, https_only=False)
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 templates.env.filters["datetimeformat"] = _datetimeformat
 
 

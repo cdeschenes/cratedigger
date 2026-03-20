@@ -7,59 +7,74 @@ Two music discovery scripts that scan your local collection and generate HTML re
 **Discover Similar Artists** — queries Last.fm for artists similar to those in your collection, filters out anything you already own, and surfaces the top recommendation per candidate with their most popular album.
 
 <p align="center">
-  <img src="screenshots/htmloutput.png" alt="Missing Popular Albums report screenshot" width="640">
+  <img src="docs/screenshots/login.png" alt="Cratedigger login page" width="360">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/RunDashboard.png" alt="Run Dashboard" width="640">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Discover.png" alt="Discover Similar Artists report" width="640">
 </p>
 
 ---
 
 ## Requirements
 
-- Python 3.12+
-- A [Last.fm API key](https://www.last.fm/api) (free)
-- Either a [Navidrome](https://www.navidrome.org/) instance (recommended) or a local music directory readable by the script
+- Docker (recommended) **or** Python 3.12+
+- A [Last.fm API key](https://www.last.fm/api/account/create) (free)
+- A [Navidrome](https://www.navidrome.org/) instance **or** a local music directory
 
 ---
 
-## Quick Start — CLI
+## Quick Start — Docker (recommended)
+
+Docker gives you a web dashboard to trigger runs, watch live logs, view reports, and schedule automatic scans — no Python setup required.
 
 ```bash
-cd Scripts/missing_popular_albums
+git clone https://github.com/cdeschenes/cratedigger.git
+cd cratedigger
 
+cp .env.example .env
+# Edit .env — at minimum set:
+#   LASTFM_API_KEY   — your Last.fm API key
+#   AUTH_PASS        — password for the web UI
+#   SECRET_KEY       — any long random string
+#   NAVIDROME_*      — or set MUSIC_ROOT to your local music path
+
+docker compose up -d --build
+```
+
+Open **http://localhost:8080** and sign in with `admin` / your `AUTH_PASS`.
+
+> **Music folder:** If you're not using Navidrome, uncomment the volume line in `docker-compose.yaml` and point it at your music directory.
+
+---
+
+## Quick Start — CLI only
+
+Run the scripts directly without Docker. Reports are written as standalone HTML files.
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Edit .env: set LASTFM_API_KEY and NAVIDROME_* (or MUSIC_ROOT)
+# Edit .env — set LASTFM_API_KEY and NAVIDROME_* (or MUSIC_ROOT)
 
 python missing_popular_albums.py
 python discover_similar_artists.py
 ```
 
-Reports are written to `missing_popular_albums.html` and `discover_similar_artists.html` in the same directory (overridable via `.env`).
-
----
-
-## Quick Start — Docker
-
-```bash
-# 1. Edit Docker/music-reports/.env — set LASTFM_API_KEY, AUTH_PASS,
-#    and NAVIDROME_* credentials
-
-cd Docker/music-reports
-docker compose up -d --build
-
-# 2. Open https://<your-domain>  (or http://localhost:5099)
-#    Log in with AUTH_USER / AUTH_PASS
-```
-
-The dashboard lets you run either script on demand, watch live log output, and view the generated reports in the browser.
+Reports are written to `missing_popular_albums.html` and `discover_similar_artists.html` in the current directory (overridable via `.env`).
 
 ---
 
 ## Configuration
 
-All settings live in `.env` (CLI) or `Docker/music-reports/.env` (Docker). The Docker compose file pins the output paths to `/data/*` — do not set those manually when using Docker.
+All settings live in `.env`. Copy `.env.example` to get started — required fields are clearly marked at the top. When using Docker, output paths are pinned to the `/data` volume automatically and should not be set manually.
 
 ### Library / API
 
@@ -212,7 +227,7 @@ Run with `--no-cache` to force fresh Last.fm data. The cache doesn't auto-expire
 
 **Auth not working in the web app**
 
-Confirm `AUTH_PASS` is set in `Docker/music-reports/.env` and the container was restarted after the change. An empty `AUTH_PASS` rejects every login attempt by design.
+Confirm `AUTH_PASS` is set in `.env` and the container was restarted after the change. An empty `AUTH_PASS` rejects every login attempt by design.
 
 **SSE log stream stops immediately or never connects**
 

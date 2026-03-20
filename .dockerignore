@@ -22,3 +22,4 @@ output/
 screenshots/
 .DS_Store
 .env
+docker-compose.yaml
