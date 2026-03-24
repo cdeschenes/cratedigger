@@ -10,7 +10,7 @@
 
 - [x] **Submit Request button** — Add a "Submit Request" button to the top of the Help & Documentation page. Opens a form (bug report or feature request) that auto-populates the GitHub Issues "new issue" URL for this repo so the user can submit without leaving the app.
 
-- [ ] **Version badge with update check** — Show the app version number in green when it matches the latest GitHub release tag, red when it's behind. Check the GitHub Releases API at page load and cache the result.
+- [x] **Version badge with update check** — Show the app version number in green when it matches the latest GitHub release tag, red when it's behind. Check the GitHub Releases API at page load and cache the result.
 
 ## Bugs / Fixes
 
