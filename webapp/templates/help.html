@@ -121,6 +121,152 @@
     a { color: #2563eb; text-decoration: none; }
     a:hover { text-decoration: underline; }
 
+    .help-actions {
+      display: flex;
+      gap: .65rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .btn-submit-request {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .45rem 1rem;
+      border-radius: 6px;
+      border: 1px solid #252525;
+      background: #1a1a1a;
+      color: #888;
+      font-size: .85rem;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      text-decoration: none;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .btn-submit-request:hover { background: #222; color: #ccc; border-color: #333; text-decoration: none; }
+
+    /* Modal */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: #111;
+      border: 1px solid #252525;
+      border-radius: 12px;
+      padding: 1.75rem;
+      width: 100%;
+      max-width: 480px;
+      margin: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: #555;
+      cursor: pointer;
+      padding: .25rem;
+      font-size: 1.1rem;
+      line-height: 1;
+      font-family: inherit;
+    }
+    .modal-close:hover { color: #aaa; }
+    .type-toggle {
+      display: flex;
+      gap: .5rem;
+    }
+    .type-btn {
+      flex: 1;
+      padding: .45rem;
+      border-radius: 6px;
+      border: 1px solid #252525;
+      background: #0d0d0d;
+      color: #555;
+      font-size: .82rem;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .type-btn.active {
+      border-color: #2563eb;
+      background: #0f1d3a;
+      color: #7aadff;
+    }
+    .modal label {
+      display: block;
+      font-size: .78rem;
+      color: #555;
+      margin-bottom: .4rem;
+    }
+    .modal input, .modal textarea {
+      width: 100%;
+      background: #0d0d0d;
+      border: 1px solid #252525;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: .875rem;
+      padding: .55rem .75rem;
+      resize: vertical;
+      transition: border-color .15s;
+    }
+    .modal input:focus, .modal textarea:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+    .modal textarea { min-height: 110px; }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: .65rem;
+    }
+    .btn-cancel {
+      padding: .45rem .9rem;
+      border-radius: 6px;
+      border: 1px solid #252525;
+      background: none;
+      color: #555;
+      font-size: .85rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .btn-cancel:hover { color: #aaa; }
+    .btn-open-issue {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .45rem 1rem;
+      border-radius: 6px;
+      border: none;
+      background: #1d4ed8;
+      color: #fff;
+      font-size: .85rem;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-open-issue:hover { background: #2563eb; }
+
     /* Icon guide */
     .icon-group-label {
       font-size: .72rem;
@@ -262,6 +408,12 @@
   <div class="help-hero">
     <h1>Help &amp; Documentation</h1>
     <p>Cratedigger scans your Navidrome library against Last.fm to surface albums you're missing and artists you might enjoy.</p>
+    <div class="help-actions">
+      <button class="btn-submit-request" onclick="openRequestModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Submit Request
+      </button>
+    </div>
   </div>
 
   <div class="help-section">
@@ -598,8 +750,92 @@
   <div class="help-section">
     <h2>About</h2>
     <p>Cratedigger is a self-hosted tool for managing and exploring your personal music library. It runs entirely on your local network and does not send any data to third parties beyond the Last.fm and Navidrome APIs you configure.</p>
-    <p>Version <strong>{{ version }}</strong> &mdash; source code coming to GitHub soon.</p>
+    <p>Version <strong>{{ version }}</strong> &mdash; <a href="https://github.com/cdeschenes/cratedigger" target="_blank" rel="noopener">github.com/cdeschenes/cratedigger</a></p>
   </div>
 
 </div>
+
+<!-- Submit Request Modal -->
+<div class="modal-backdrop" id="requestModal" onclick="closeOnBackdrop(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Submit a Request</h2>
+      <button class="modal-close" onclick="closeRequestModal()" aria-label="Close">&times;</button>
+    </div>
+    <div>
+      <label>Type</label>
+      <div class="type-toggle">
+        <button class="type-btn active" id="type-bug" onclick="setType('bug')">Bug Report</button>
+        <button class="type-btn" id="type-feature" onclick="setType('feature')">Feature Request</button>
+      </div>
+    </div>
+    <div>
+      <label for="req-title">Title</label>
+      <input type="text" id="req-title" placeholder="Short summary of the issue or idea">
+    </div>
+    <div>
+      <label for="req-body" id="req-body-label">Steps to reproduce / what you expected</label>
+      <textarea id="req-body" placeholder="Describe the problem or feature in detail..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeRequestModal()">Cancel</button>
+      <button class="btn-open-issue" onclick="openIssue()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        Open on GitHub
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const REPO = 'cdeschenes/cratedigger';
+  let _type = 'bug';
+
+  function openRequestModal() {
+    document.getElementById('requestModal').classList.add('open');
+    document.getElementById('req-title').focus();
+  }
+
+  function closeRequestModal() {
+    document.getElementById('requestModal').classList.remove('open');
+  }
+
+  function closeOnBackdrop(e) {
+    if (e.target === document.getElementById('requestModal')) closeRequestModal();
+  }
+
+  function setType(type) {
+    _type = type;
+    document.getElementById('type-bug').classList.toggle('active', type === 'bug');
+    document.getElementById('type-feature').classList.toggle('active', type === 'feature');
+    document.getElementById('req-body-label').textContent =
+      type === 'bug'
+        ? 'Steps to reproduce / what you expected'
+        : 'Describe the feature and why it would be useful';
+    document.getElementById('req-body').placeholder =
+      type === 'bug'
+        ? 'Describe the problem in detail...'
+        : 'Describe the feature in detail...';
+  }
+
+  function openIssue() {
+    const title = document.getElementById('req-title').value.trim();
+    const body  = document.getElementById('req-body').value.trim();
+    if (!title) {
+      document.getElementById('req-title').focus();
+      return;
+    }
+    const label = _type === 'bug' ? 'bug' : 'enhancement';
+    const bodyText = _type === 'bug'
+      ? `**Describe the bug**\n${body || '(describe the issue)'}\n\n**Steps to reproduce**\n\n**Expected behavior**\n\n**Environment**\n- Version: v{{ version }}\n- Browser: `
+      : `**Feature request**\n${body || '(describe the feature)'}\n\n**Why would this be useful?**\n`;
+    const url = `https://github.com/${REPO}/issues/new?labels=${label}&title=${encodeURIComponent(title)}&body=${encodeURIComponent(bodyText)}`;
+    window.open(url, '_blank', 'noopener');
+    closeRequestModal();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeRequestModal();
+  });
+</script>
 {% endblock %}

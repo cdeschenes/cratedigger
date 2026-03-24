@@ -134,10 +134,14 @@ def load_dismissed() -> dict[str, list[str]]:
 
 
 def save_dismissed(data: dict[str, list[str]]) -> None:
-    DISMISSED_FILE.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    try:
+        DISMISSED_FILE.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        logger.exception("Failed to write dismissed file: %s", DISMISSED_FILE)
+        raise
 
 
 def _apply_dismissed(items: list, section: str, dismissed: dict) -> tuple[list, int]:

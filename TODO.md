@@ -8,7 +8,7 @@
 
 - [ ] **Debug log viewer** — Add a "Debug Log" button to the top of the Help & Documentation page that tails the last 1000 lines of the app log. Syntax highlighting to make errors stand out (red for ERROR, yellow for WARNING, dimmed for DEBUG).
 
-- [ ] **Submit Request button** — Add a "Submit Request" button to the top of the Help & Documentation page. Opens a form (bug report or feature request) that auto-populates the GitHub Issues "new issue" URL for this repo so the user can submit without leaving the app.
+- [x] **Submit Request button** — Add a "Submit Request" button to the top of the Help & Documentation page. Opens a form (bug report or feature request) that auto-populates the GitHub Issues "new issue" URL for this repo so the user can submit without leaving the app.
 
 - [ ] **Version badge with update check** — Show the app version number in green when it matches the latest GitHub release tag, red when it's behind. Check the GitHub Releases API at page load and cache the result.
 
@@ -20,4 +20,4 @@
 
 - [ ] **Discover similarity matching too loose** — `DISCOVER_SIMILARITY_MODE=tags` is still producing clearly unrelated pairings (e.g. Haunt → Beach Fossils). Revisit the Jaccard tag-overlap scoring: check which tags are being compared, whether the blocklist is catching noise tags, and whether the minimum overlap threshold is enforced correctly. Consider raising the default `DISCOVER_TAG_OVERLAP`, improving the tag blocklist, or displaying matched tags on the card so users can see why a match was made.
 
-- [ ] **Dismissed albums not persistent across container rebuilds** — `dismissed.json` must be written to the `/data` volume so it survives image updates. Verify the `DISMISSED_FILE` env var is correctly mapped in `docker-compose.yaml` and that the file is never written to the container's local filesystem.
+- [x] **Dismissed albums not persistent across container rebuilds** — Investigated: already working correctly. `dismissed.json` is written to `/data/dismissed.json` on the `cratedigger-data` named Docker volume. Data survives `docker compose pull && docker compose up -d`. Only `docker compose down -v` destroys it (that command explicitly removes volumes). Data loss on migration from the old `music-reports` bind-mount setup was a one-time event. Hardened `save_dismissed()` with try/except + logger.exception so write failures are logged instead of silently crashing.
