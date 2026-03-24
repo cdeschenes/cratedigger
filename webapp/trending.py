@@ -6,10 +6,12 @@ Sources (controlled by TRENDING_FEEDS env var, comma-separated):
   lastfm    — Last.fm chart: top artists → their top albums
   bandcamp  — Bandcamp Daily RSS feed (best-effort editorial title parsing)
 """
+import hashlib
 import json
 import logging
 import os
 import re
+import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +27,10 @@ logger = logging.getLogger(__name__)
 
 _LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY", "")
 
+_NAVIDROME_URL  = os.environ.get("NAVIDROME_URL",  "").strip()
+_NAVIDROME_USER = os.environ.get("NAVIDROME_USER", "").strip()
+_NAVIDROME_PASS = os.environ.get("NAVIDROME_PASS", "").strip()
+
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 TRENDING_FILE = DATA_DIR / "trending_albums.json"
 
@@ -33,6 +39,7 @@ TRENDING_FEEDS: list[str] = [f.strip() for f in _TRENDING_FEEDS_RAW.split(",") i
 
 _TRENDING_TTL = 3600  # seconds
 _trending_cache: dict = {"items": [], "expires_at": 0.0}
+_library_cache: dict = {"keys": set(), "expires_at": 0.0}
 
 # Bandcamp Daily title patterns (structured editorial formats)
 _BC_STRUCTURED_RE = re.compile(
@@ -178,6 +185,10 @@ async def fetch_bandcamp_daily() -> list[dict]:
                 artist_display = m.group(1).strip()
                 album_title = m.group(2).strip()
 
+            # Skip entries we couldn't parse into artist + album (editorial articles, etc.)
+            if not artist_display:
+                continue
+
             # Extract cover image
             image_url = None
             media_thumbnails = getattr(entry, "media_thumbnail", None)
@@ -211,6 +222,64 @@ async def fetch_bandcamp_daily() -> list[dict]:
     except Exception:
         logger.exception("Error fetching Bandcamp Daily RSS")
         return []
+
+
+async def get_local_library() -> set[str]:
+    """Return owned album keys ('artist_normalized|album_normalized') from Navidrome, TTL-cached."""
+    now = time.monotonic()
+    if _library_cache["keys"] and now < _library_cache["expires_at"]:
+        return _library_cache["keys"]
+
+    if not (_NAVIDROME_URL and _NAVIDROME_USER and _NAVIDROME_PASS):
+        return set()
+
+    salt = secrets.token_hex(6)
+    token = hashlib.md5(f"{_NAVIDROME_PASS}{salt}".encode()).hexdigest()
+    auth = {
+        "u": _NAVIDROME_USER,
+        "t": token,
+        "s": salt,
+        "v": "1.16.1",
+        "c": "cratedigger",
+        "f": "json",
+    }
+    endpoint = f"{_NAVIDROME_URL.rstrip('/')}/rest/getAlbumList2.view"
+    owned: set[str] = set()
+    size, offset = 500, 0
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            while True:
+                params = {
+                    **auth,
+                    "type": "alphabeticalByArtist",
+                    "size": str(size),
+                    "offset": str(offset),
+                }
+                r = await client.get(endpoint, params=params)
+                r.raise_for_status()
+                sr = r.json().get("subsonic-response", {})
+                if sr.get("status") != "ok":
+                    logger.warning("Navidrome library fetch error: %s", sr.get("error", {}))
+                    break
+                album_list = sr.get("albumList2", {}).get("album", [])
+                for album in album_list:
+                    album_name = album.get("name") or album.get("title", "")
+                    artist_name = album.get("albumArtist") or album.get("artist", "")
+                    if album_name and artist_name:
+                        key = f"{normalize_text(artist_name)}|{normalize_album_title(album_name)}"
+                        owned.add(key)
+                if len(album_list) < size:
+                    break
+                offset += size
+    except Exception:
+        logger.exception("Error fetching local library from Navidrome")
+        return set()
+
+    _library_cache["keys"] = owned
+    _library_cache["expires_at"] = now + _TRENDING_TTL
+    logger.info("Navidrome library loaded: %d albums", len(owned))
+    return owned
 
 
 def merge_and_deduplicate(sources: list[list[dict]]) -> list[dict]:
@@ -247,6 +316,13 @@ async def get_trending(force: bool = False) -> list[dict]:
             sources.append(await _fetchers[feed_name]())
 
     merged = merge_and_deduplicate(sources)
+
+    owned = await get_local_library()
+    if owned:
+        merged = [
+            item for item in merged
+            if f"{item['artist_normalized']}|{item['album_normalized']}" not in owned
+        ]
 
     _trending_cache["items"] = merged
     _trending_cache["expires_at"] = now + _TRENDING_TTL
