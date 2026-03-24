@@ -151,6 +151,13 @@
     <p>Trigger script runs manually and watch live output.</p>
   </div>
 
+  <div style="margin-bottom:1.25rem">
+    <button class="btn-run" id="run-all-btn" onclick="runAll()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      Run All
+    </button>
+  </div>
+
   <div class="cards">
     {% for job_id, label in labels.items() %}
     {% set job = jobs[job_id] %}
@@ -172,9 +179,9 @@
           <label>Next run</label>
           <span>{{ next_run }}</span>
         </span>
-        {% elif loop.first and schedule_missing %}
+        {% elif job_id == "missing" and schedule_missing %}
         <span><label>Schedule</label><span>{{ schedule_missing }}</span></span>
-        {% elif not loop.first and schedule_discover %}
+        {% elif job_id == "discover" and schedule_discover %}
         <span><label>Schedule</label><span>{{ schedule_discover }}</span></span>
         {% endif %}
         <span>
@@ -272,6 +279,22 @@
     pre.scrollTop = pre.scrollHeight;
   }
 
+  const ALL_JOBS = ['missing', 'discover', 'trending'];
+
+  function checkRunAllBtn() {
+    const allIdle = ALL_JOBS.every(id => {
+      const btn = document.getElementById("run-btn-" + id);
+      return btn && !btn.disabled;
+    });
+    const runAllBtn = document.getElementById("run-all-btn");
+    if (runAllBtn) runAllBtn.disabled = !allIdle;
+  }
+
+  function runAll() {
+    document.getElementById("run-all-btn").disabled = true;
+    ALL_JOBS.forEach(triggerRun);
+  }
+
   function openStream(jobId) {
     if (sources[jobId]) { sources[jobId].close(); delete sources[jobId]; }
     const es = new EventSource("/logs/" + jobId);
@@ -291,6 +314,7 @@
           if (lastRun) lastRun.textContent = formatDate(data.finished_at);
           const exitEl = document.getElementById("exit-" + jobId);
           if (exitEl) exitEl.textContent = data.exit_code ?? "—";
+          checkRunAllBtn();
         })
         .catch(() => {});
     });
@@ -300,6 +324,7 @@
       delete sources[jobId];
       appendLog(jobId, "[connection closed]");
       setRunBtn(jobId, false);
+      checkRunAllBtn();
     };
   }
 
@@ -337,6 +362,7 @@
     openStream("{{ job_id }}");
     {% endif %}
     {% endfor %}
+    checkRunAllBtn();
   });
 </script>
 {% endblock %}

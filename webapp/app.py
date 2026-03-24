@@ -65,9 +65,12 @@ JSON_FILES: dict[str, str] = {
 }
 
 JOB_LABELS: dict[str, str] = {
-    "missing": "Missing Popular Albums",
+    "missing":  "Missing Popular Albums",
     "discover": "Discover Similar Artists",
+    "trending": "New & Trending",
 }
+
+RUNNABLE_JOBS = frozenset(JOB_LABELS)
 
 DISMISSED_FILE = DATA_DIR / "dismissed.json"
 
@@ -355,15 +358,11 @@ async def section_fragment(
 @app.get("/dashboard")
 async def dashboard(request: Request, _: str = Depends(require_auth)):
     jobs = get_all_status()
-    reports = {
-        job_id: (DATA_DIR / filename).exists()
-        for job_id, filename in REPORT_FILES.items()
-    }
-    json_data = {
-        job_id: (DATA_DIR / filename).exists()
-        for job_id, filename in JSON_FILES.items()
-    }
+    reports = {job_id: (DATA_DIR / filename).exists() for job_id, filename in REPORT_FILES.items()}
+    reports["trending"] = False  # no HTML report for trending
+    json_data = {job_id: (DATA_DIR / filename).exists() for job_id, filename in JSON_FILES.items()}
     next_runs = {job_id: get_next_run(job_id) for job_id in REPORT_FILES}
+    next_runs["trending"] = None
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -407,7 +406,7 @@ async def serve_report(job_id: str, _: str = Depends(require_auth)):
 
 @app.post("/run/{job_id}")
 async def trigger_run(job_id: str, _: str = Depends(require_auth)):
-    if job_id not in REPORT_FILES:
+    if job_id not in RUNNABLE_JOBS:
         raise HTTPException(status_code=404, detail="Unknown job")
     try:
         await run_job(job_id)
@@ -420,7 +419,7 @@ async def trigger_run(job_id: str, _: str = Depends(require_auth)):
 
 @app.get("/status/{job_id}")
 async def job_status_endpoint(job_id: str, _: str = Depends(require_auth)):
-    if job_id not in REPORT_FILES:
+    if job_id not in RUNNABLE_JOBS:
         raise HTTPException(status_code=404, detail="Unknown job")
     return get_status(job_id)
 
@@ -429,7 +428,7 @@ async def job_status_endpoint(job_id: str, _: str = Depends(require_auth)):
 
 @app.get("/logs/{job_id}")
 async def log_stream(job_id: str, _: str = Depends(require_auth)):
-    if job_id not in REPORT_FILES:
+    if job_id not in RUNNABLE_JOBS:
         raise HTTPException(status_code=404, detail="Unknown job")
     return StreamingResponse(
         stream_logs(job_id),

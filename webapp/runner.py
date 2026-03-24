@@ -1,8 +1,8 @@
 """
 webapp/runner.py — subprocess execution and SSE log streaming.
 
-Job IDs are fixed strings: "missing" and "discover".
-Each job runs the corresponding Python script as a subprocess, captures stdout+stderr,
+Job IDs: "missing", "discover" (subprocess-based), "trending" (async fetch).
+Each subprocess job runs the corresponding Python script, captures stdout+stderr,
 and fans the output out to any waiting SSE consumers.
 """
 import asyncio
@@ -37,8 +37,9 @@ class JobState:
 
 # Global state — one entry per job ID, lives for the lifetime of the process.
 _jobs: dict[str, JobState] = {
-    "missing": JobState(),
+    "missing":  JobState(),
     "discover": JobState(),
+    "trending": JobState(),
 }
 
 
@@ -61,18 +62,12 @@ def get_all_status() -> dict[str, dict]:
 
 async def run_job(job_id: str, no_cache: bool = False, workers: int | None = None) -> None:
     """
-    Launch the script subprocess. Raises RuntimeError if already running.
-    Returns immediately; the subprocess continues in the background.
+    Launch a job. Raises RuntimeError if already running.
+    Returns immediately; the work continues in the background.
     """
     state = _jobs[job_id]
     if state.status == "running":
         raise RuntimeError(f"Job '{job_id}' is already running.")
-
-    cmd = [sys.executable, str(SCRIPT_MAP[job_id])]
-    if no_cache:
-        cmd.append("--no-cache")
-    if workers is not None:
-        cmd.extend(["--workers", str(int(workers))])
 
     state.status = "running"
     state.pid = None
@@ -80,6 +75,16 @@ async def run_job(job_id: str, no_cache: bool = False, workers: int | None = Non
     state.finished_at = None
     state.exit_code = None
     state.log_buffer.clear()
+
+    if job_id == "trending":
+        asyncio.create_task(_run_and_capture_trending())
+        return
+
+    cmd = [sys.executable, str(SCRIPT_MAP[job_id])]
+    if no_cache:
+        cmd.append("--no-cache")
+    if workers is not None:
+        cmd.extend(["--workers", str(int(workers))])
 
     asyncio.create_task(_run_and_capture(job_id, cmd))
 
@@ -119,6 +124,36 @@ async def _run_and_capture(job_id: str, cmd: list[str]) -> None:
             except asyncio.QueueFull:
                 pass
         state._subscribers.clear()
+
+
+async def _run_and_capture_trending() -> None:
+    state = _jobs["trending"]
+    try:
+        from webapp.trending import TRENDING_FEEDS, get_trending  # local import avoids circular dep
+        feeds_str = ", ".join(TRENDING_FEEDS) if TRENDING_FEEDS else "none configured"
+        _log("trending", f"Fetching trending releases from: {feeds_str}")
+        items = await get_trending(force=True)
+        _log("trending", f"Done — {len(items)} releases fetched and cached.")
+        state.exit_code = 0
+        state.status = "succeeded"
+    except Exception as exc:
+        _log("trending", f"Error: {exc}")
+        state.exit_code = -1
+        state.status = "failed"
+    finally:
+        state.finished_at = datetime.now(tz=timezone.utc)
+        for q in list(state._subscribers):
+            try:
+                q.put_nowait(None)
+            except asyncio.QueueFull:
+                pass
+        state._subscribers.clear()
+
+
+def _log(job_id: str, line: str) -> None:
+    """Append a line to the job's log buffer and broadcast it to subscribers."""
+    _jobs[job_id].log_buffer.append(line)
+    _broadcast(job_id, line)
 
 
 def _broadcast(job_id: str, line: str) -> None:

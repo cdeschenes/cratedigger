@@ -469,12 +469,8 @@
 
   {# ── New & Trending ── #}
   <div id="section-trending" class="section">
-    <div class="section-header" style="display:flex;align-items:center;gap:.75rem">
+    <div class="section-header">
       <h2 id="section-trending-heading" class="section-title">New &amp; Trending</h2>
-      <button class="action-btn" onclick="refreshTrending()" style="font-size:.7rem;padding:.2rem .5rem" title="Fetch latest releases">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        Refresh
-      </button>
     </div>
 
     <div id="section-trending-content">
@@ -566,11 +562,6 @@
             .scrollIntoView({ behavior: "smooth", block: "start" });
     history.pushState({ d_page: dPage, m_page: mPage, t_page: tPage }, "",
                       `/?d_page=${dPage}&m_page=${mPage}&t_page=${tPage}`);
-  }
-
-  async function refreshTrending() {
-    const res = await fetch("/api/trending/refresh", { method: "POST" });
-    if (res.ok) await loadSection("trending", 1);
   }
 
   async function dismissCard(btn) {
