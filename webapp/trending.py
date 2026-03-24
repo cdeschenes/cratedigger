@@ -41,12 +41,15 @@ _TRENDING_TTL = 3600  # seconds
 _trending_cache: dict = {"items": [], "expires_at": 0.0}
 _library_cache: dict = {"keys": set(), "expires_at": 0.0}
 
-# Bandcamp Daily title patterns (structured editorial formats)
+# Bandcamp Daily title patterns.
+# Current format (2025+): Artist, "Title"  — uses Unicode curly quotes U+201C/U+201D
+_BC_COMMA_QUOTE_RE = re.compile(r'^(.+?),\s*[\u201c"](.+?)[\u201d"]')
+# Legacy format: "Album of the Day: Artist — Title" or "Artist — Title" (em-dash)
 _BC_STRUCTURED_RE = re.compile(
     r"(?:Album of the Day|Stream|New Album|Premiere):\s*(.+?)\s*[–—-]\s*(.+)",
     re.IGNORECASE,
 )
-_BC_EMDASH_RE = re.compile(r"^(.+?)\s*[–—]\s*(.+)$")  # em-dash split only (less ambiguous)
+_BC_EMDASH_RE = re.compile(r"^(.+?)\s*[–—]\s*(.+)$")
 
 
 def _search_urls(artist: str, album: str) -> dict:
@@ -175,10 +178,12 @@ async def fetch_bandcamp_daily() -> list[dict]:
             title = entry.get("title", "")
             link = entry.get("link", "")
 
-            # Best-effort structured parsing
+            # Best-effort structured parsing (try current format first, then legacy)
             artist_display = ""
             album_title = title
-            m = _BC_STRUCTURED_RE.search(title)
+            m = _BC_COMMA_QUOTE_RE.match(title)
+            if not m:
+                m = _BC_STRUCTURED_RE.search(title)
             if not m:
                 m = _BC_EMDASH_RE.match(title)
             if m:
