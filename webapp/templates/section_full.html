@@ -22,6 +22,31 @@
       letter-spacing: -0.02em;
       margin-bottom: 1rem;
     }
+    .full-pager {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      padding: 2rem 0 3rem;
+    }
+    .full-pager-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .5rem 1.1rem;
+      border-radius: 6px;
+      border: 1px solid #252525;
+      background: #1a1a1a;
+      color: #777;
+      font-size: .875rem;
+      font-weight: 500;
+      text-decoration: none;
+      font-family: inherit;
+      transition: background .15s, color .15s;
+    }
+    .full-pager-btn:hover { background: #222; color: #aaa; }
+    .full-pager-btn.disabled { opacity: .3; pointer-events: none; }
+    .full-pager-info { font-size: .82rem; color: #555; }
 {% endblock %}
 
 {% block content %}
@@ -34,6 +59,22 @@
   <h1 class="full-section-title">{{ section_title }}</h1>
 
   {% include "_section_cards.html" %}
+
+  {% if pages > 1 %}
+  <div class="full-pager">
+    <a class="full-pager-btn {% if page <= 1 %}disabled{% endif %}"
+       href="/section/{{ section }}?page={{ page - 1 }}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      Prev
+    </a>
+    <span class="full-pager-info">{{ page }} / {{ pages }}</span>
+    <a class="full-pager-btn {% if page >= pages %}disabled{% endif %}"
+       href="/section/{{ section }}?page={{ page + 1 }}">
+      Next
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </a>
+  </div>
+  {% endif %}
 </div>
 
 <script>

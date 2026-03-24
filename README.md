@@ -1,10 +1,12 @@
 # Cratedigger
 
-Two music discovery scripts that scan your local collection and generate HTML reports from Last.fm data. Run them from the command line or let a Docker-hosted web dashboard trigger and schedule them for you.
+Two music discovery scripts that scan your collection and generate HTML reports from Last.fm data. Run them from the command line or let a Docker-hosted web dashboard trigger and schedule them.
 
 **Missing Popular Albums** — for every artist you own, finds the single highest-playcount album or EP you don't have yet.
 
 **Discover Similar Artists** — queries Last.fm for artists similar to those in your collection, filters out anything you already own, and surfaces the top recommendation per candidate with their most popular album.
+
+**New & Trending** — pulls new releases from Spotify, Last.fm charts, and Bandcamp Daily. Filters out albums already in your library.
 
 <p align="center">
   <img src="docs/screenshots/login.png" alt="Cratedigger login page" width="360">
@@ -43,8 +45,11 @@ cp .env.example .env
 #   SECRET_KEY       — any long random string
 #   NAVIDROME_*      — or set MUSIC_ROOT to your local music path
 
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
+
+The image is pre-built and published to `ghcr.io/cdeschenes/cratedigger:latest`. There is no local build step.
 
 Open **http://localhost:8080** and sign in with `admin` / your `AUTH_PASS`.
 
@@ -80,7 +85,7 @@ All settings live in `.env`. Copy `.env.example` to get started — required fie
 
 | Variable | Default | Required | Purpose |
 |---|---|---|---|
-| `LASTFM_API_KEY` | | Yes | Last.fm API key. Get one at last.fm/api. |
+| `LASTFM_API_KEY` | | Yes | Last.fm API key. Get one at last.fm/api. Also used for Last.fm charts in New & Trending. |
 | `MUSIC_ROOT` | `/Volumes/NAS/Media/Music/Music_Server` | Fallback | Filesystem path to scan when Navidrome is not configured. |
 | `NAVIDROME_URL` | | No | Base URL of your Navidrome instance, e.g. `https://navidrome.example.com` |
 | `NAVIDROME_USER` | | No | Navidrome username |
@@ -121,20 +126,22 @@ All three of `NAVIDROME_URL`, `NAVIDROME_USER`, and `NAVIDROME_PASS` must be set
 | `SUGGESTIONS_PER_ARTIST` | `2` | Max candidate artists to collect per local artist from Last.fm's similar-artist list. |
 | `SIMILAR_ARTIST_LIMIT` | `30` | How many similar artists Last.fm returns per query before filtering. |
 | `DISCOVER_TAG_OVERLAP` | `1` | Minimum number of shared Last.fm genre tags between a candidate and at least one source artist. Set to `0` to disable genre filtering entirely. |
-| `DISCOVER_SIMILARITY_MODE` | `lastfm` | `lastfm`: sort by Last.fm shared-listener score (default). `tags`: re-score candidates by genre-tag Jaccard similarity and drop zero-overlap matches — fixes cross-genre mismatches. |
+| `DISCOVER_SIMILARITY_MODE` | `lastfm` | `lastfm`: sort by Last.fm shared-listener score (default). `tags`: re-score candidates by genre-tag Jaccard similarity and drop zero-overlap matches. |
 
 ### Web app / Docker only
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `AUTH_USER` | `admin` | HTTP Basic Auth username. |
-| `AUTH_PASS` | | HTTP Basic Auth password. **Required.** Empty string means every login attempt fails. |
+| `AUTH_USER` | `admin` | Login username. |
+| `AUTH_PASS` | | Login password. Required. Empty string means every login attempt fails. |
+| `SECRET_KEY` | | Any long random string. Used to sign session cookies. Required. |
 | `SCHEDULE_MISSING` | | 5-field cron expression for automatic runs of `missing_popular_albums.py`. Empty = disabled. Example: `0 3 * * 0` (Sunday 3 AM). |
 | `SCHEDULE_DISCOVER` | | 5-field cron expression for automatic runs of `discover_similar_artists.py`. Empty = disabled. |
+| `TRENDING_FEEDS` | `spotify,lastfm,bandcamp` | Comma-separated sources for New & Trending. Remove a source to disable it. Valid values: `spotify`, `lastfm`, `bandcamp`. Bandcamp requires no credentials. |
 | `DATA_DIR` | `/data` | Directory where the web app looks for reports. Set automatically in Docker. |
-| `SPOTIFY_CLIENT_ID` | | Spotify app client ID. Enables Spotify embeds in the viewer. Requires a Spotify Premium account to register a dev app (as of Feb 2026). |
+| `SPOTIFY_CLIENT_ID` | | Spotify app client ID. Enables Spotify embeds in the viewer and Spotify results in New & Trending. Requires a Spotify Premium account to register a dev app (as of Feb 2026). |
 | `SPOTIFY_CLIENT_SECRET` | | Spotify app client secret. |
-| `YOUTUBE_API_KEY` | | YouTube **Data API v3** key. Enables YouTube embeds in the viewer. Must have the Data API v3 enabled in Google Cloud Console (not the IFrame Player API). |
+| `YOUTUBE_API_KEY` | | YouTube Data API v3 key. Enables YouTube embeds in the viewer. Must have the Data API v3 enabled in Google Cloud Console (not the IFrame Player API). |
 | `SLSKD_URL` | | Base URL of your SLSKD instance, e.g. `https://slskd.yourdomain.com`. Enables the SLSKD search button on every card. |
 | `SLSKD_API_KEY` | | API key for SLSKD (set in `appsettings.yml` under `web.authentication.api_keys`). Preferred over username/password. |
 | `SLSKD_USER` / `SLSKD_PASS` | | Fallback credentials if not using an API key. |
@@ -161,13 +168,19 @@ Both scripts share these flags:
 
 ## Web app dashboard
 
-The Docker container runs a FastAPI app on port 8080. The dashboard shows job status (idle / running / succeeded / failed), lets you trigger runs on demand, and streams live log output to the browser.
+The Docker container runs a FastAPI app on port 8080. The dashboard has three job panels: Missing Popular Albums, Discover Similar Artists, and New & Trending. Each panel shows a status badge (idle, running, succeeded, failed), a Run Now button, the last run time, the next scheduled run if configured, and the exit code.
 
-The **Report Viewer** (`/`) shows both reports as paginated card grids with AJAX navigation (Prev / Next updates the cards without a full page reload, and browser back/forward works). Each card includes:
+A **Run All** button at the top triggers all three jobs at once. It is disabled while any job is running.
 
-- **Streaming preview** — hover the album art to reveal service icons (Apple Music, Spotify, YouTube). Click one to open an embedded player directly inside the card. No credentials needed for Apple Music; Spotify and YouTube require `SPOTIFY_*` / `YOUTUBE_API_KEY` in your `.env`.
-- **Copy** — copies the artist + album title to clipboard.
-- **Dismiss** — hides the card permanently. Dismissed items are stored in `/data/dismissed.json` and are excluded from future script runs as well.
+When a job starts, the panel opens a live log area and streams script output line by line via SSE. Reloading mid-run replays the buffered log (up to 2000 lines) before the live stream resumes.
+
+The **Report Viewer** (`/`) has three sections: Discover Similar Artists, Missing Popular Albums, and New & Trending. Sections use AJAX pagination — Prev/Next updates the cards in-place and browser back/forward works. Clicking a section title opens a full-page view at `/section/{section}` with all items in a scrollable list and no pagination. A back link returns to the main viewer.
+
+Each card includes:
+
+- Streaming preview — hover the album art to reveal service icons (Apple Music, Spotify, YouTube). Click one to open an embedded player directly inside the card. Apple Music requires no credentials; Spotify and YouTube require `SPOTIFY_*` / `YOUTUBE_API_KEY` in your `.env`.
+- Copy — copies the artist + album title to clipboard.
+- Dismiss — hides the card permanently. Dismissed items are stored in `/data/dismissed.json` and excluded from future script runs.
 
 ---
 
@@ -176,25 +189,28 @@ The **Report Viewer** (`/`) shows both reports as paginated card grids with AJAX
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/healthz` | None | Docker health check |
-| GET | `/` | Basic | Combined report viewer (home) |
-| GET | `/dashboard` | Basic | Script run dashboard |
-| GET | `/report/{missing\|discover}` | Basic | Serve the generated HTML report |
-| POST | `/run/{missing\|discover}` | Basic | Trigger a script run. Returns 409 if already running. |
-| GET | `/status/{missing\|discover}` | Basic | JSON job status snapshot |
-| GET | `/logs/{missing\|discover}` | Basic | SSE live log stream |
-| GET | `/api/section/{section}` | Basic | AJAX partial — card grid + pager for one section |
-| GET | `/api/stream-info` | Basic | Look up streaming embed URL for an album |
-| POST | `/api/slskd-search` | Basic | Queue album search on a running SLSKD instance |
-| POST | `/dismiss` | Basic | Add item to dismissed list |
-| DELETE | `/dismiss` | Basic | Remove item from dismissed list |
-| GET | `/dismissed` | Basic | Return full dismissed list |
+| GET | `/` | Session | Combined report viewer |
+| GET | `/dashboard` | Session | Script run dashboard |
+| GET | `/help` | Session | Help and card reference |
+| GET | `/section/{missing\|discover\|trending}` | Session | Full-page view of one section (all items, no pagination) |
+| GET | `/report/{missing\|discover}` | Session | Serve the raw HTML report file |
+| POST | `/run/{missing\|discover\|trending}` | Session | Trigger a script run. Returns 409 if already running. |
+| GET | `/status/{missing\|discover\|trending}` | Session | JSON job status snapshot |
+| GET | `/logs/{missing\|discover\|trending}` | Session | SSE live log stream |
+| GET | `/api/section/{section}` | Session | AJAX partial — card grid + pager for one section |
+| POST | `/api/trending/refresh` | Session | Force-refresh the trending cache |
+| GET | `/api/stream-info` | Session | Look up streaming embed URL for an album |
+| POST | `/api/slskd-search` | Session | Queue album search on a running SLSKD instance |
+| POST | `/dismiss` | Session | Add item to dismissed list |
+| DELETE | `/dismiss` | Session | Remove item from dismissed list |
+| GET | `/dismissed` | Session | Return full dismissed list |
 
 ---
 
 ## Security
 
-- HTTP Basic Auth uses `secrets.compare_digest()` — timing-safe against brute-force enumeration.
-- `AUTH_PASS` defaults to an empty string, which causes every login to fail until you set it. This is intentional.
+- Session auth uses form-based login. `AUTH_PASS` defaults to an empty string, which causes every login to fail until you set it. This is intentional.
+- `SECRET_KEY` is required to sign session cookies. Any long random string works.
 - HTTPS is handled by Traefik. The app itself speaks plain HTTP on 8080.
 - OpenAPI docs are disabled (`/docs` and `/redoc` return 404).
 - The container runs as UID 1002 / GID 990 (non-root).

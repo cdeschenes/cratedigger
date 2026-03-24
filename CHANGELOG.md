@@ -6,6 +6,38 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-03-24
+
+### Added
+
+- New & Trending section — third section in the Report Viewer pulling new releases from
+  Spotify (new-releases API), Last.fm (`chart.getTopArtists` + `artist.getTopAlbums`), and
+  Bandcamp Daily RSS. Controlled by `TRENDING_FEEDS` env var (comma-separated; default:
+  `spotify,lastfm,bandcamp`). Results are merged by interleaving sources for variety and
+  deduplicated on normalized artist+album key.
+- Owned album filtering for trending — when Navidrome credentials are configured, albums
+  already in the library are excluded from New & Trending results. The library is fetched via
+  `getAlbumList2` and cached for one hour alongside the trending data.
+- Trending job on Run Dashboard — New & Trending has its own job card (status badge, Run Now,
+  live log, last run time). Refreshing regenerates and re-filters the trending list.
+- Run All button — triggers all three jobs (missing, discover, trending) at once from the
+  dashboard. Disabled while any job is running.
+- Full-page section view (`/section/{section}`) — clicking a section title in the Report
+  Viewer opens a standalone scrollable page with all items and no pagination. Dismiss buttons
+  work the same way. A back link returns to the main viewer.
+- Mobile responsive layout — navigation bar adapts at 640px and 480px breakpoints (version
+  label hidden, GitHub icon hidden on smallest screens). Dashboard cards stack to full width
+  below 480px. Album card action buttons have larger tap targets on mobile.
+- Pre-built Docker image via GitHub Actions — image published to
+  `ghcr.io/cdeschenes/cratedigger:latest` on every push to `beta`. Users run
+  `docker compose pull && docker compose up -d` instead of building locally.
+
+### Fixed
+
+- Bandcamp Daily parsing — Bandcamp changed their RSS title format in 2025 from
+  `Artist — Title` (em-dash) to `Artist, "Title"` using Unicode curly quotes (U+201C/U+201D).
+  Added `_BC_COMMA_QUOTE_RE` as the primary pattern; legacy em-dash pattern kept as fallback.
+
 ## [1.1.0] - 2026-03-19
 
 ### Added

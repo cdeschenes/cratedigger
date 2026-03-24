@@ -46,9 +46,10 @@ from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
 from webapp.trending import TRENDING_FEEDS, get_trending
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 ITEMS_PER_PAGE = 4
+SECTION_FULL_PER_PAGE = 100
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 
@@ -311,6 +312,7 @@ async def section_full_view(
     section: str,
     request: Request,
     _: str = Depends(require_auth),
+    page: int = 1,
 ):
     if section not in ("discover", "missing", "trending"):
         raise HTTPException(status_code=404, detail="Unknown section")
@@ -331,6 +333,10 @@ async def section_full_view(
             items_all, dismissed_count = _apply_dismissed(raw_items, section, dismissed)
 
     total = len(items_all) if items_all is not None else 0
+    pages = max(1, -(-total // SECTION_FULL_PER_PAGE))
+    page = max(1, min(page, pages))
+    start = (page - 1) * SECTION_FULL_PER_PAGE
+    page_items = (items_all or [])[start : start + SECTION_FULL_PER_PAGE]
 
     return templates.TemplateResponse(
         request,
@@ -339,9 +345,9 @@ async def section_full_view(
             "version": __version__,
             "section": section,
             "section_title": JOB_LABELS[section],
-            "items": items_all or [],
-            "page": 1,
-            "pages": 1,
+            "items": page_items,
+            "page": page,
+            "pages": pages,
             "total": total,
             "dismissed_count": dismissed_count,
             "generated_at": generated_at,

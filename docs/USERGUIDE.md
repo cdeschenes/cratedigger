@@ -12,14 +12,17 @@ This guide covers how both scripts work, how to set them up, and how to get the 
 4. [Configuration reference](#configuration-reference)
 5. [Using the web dashboard](#using-the-web-dashboard)
 6. [Viewer features](#viewer-features)
-7. [Scheduling](#scheduling)
-8. [Reading the HTML reports](#reading-the-html-reports)
-8. [How matching works](#how-matching-works)
-9. [The --trace-artist diagnostic](#the---trace-artist-diagnostic)
-10. [NAVIDROME_MUSIC_FOLDER](#navidrome_music_folder)
-11. [Cache management](#cache-management)
-12. [Troubleshooting](#troubleshooting)
-13. [FAQ](#faq)
+7. [New & Trending section](#new--trending-section)
+8. [Full-page section view](#full-page-section-view)
+9. [Mobile support](#mobile-support)
+10. [Scheduling](#scheduling)
+11. [Reading the HTML reports](#reading-the-html-reports)
+12. [How matching works](#how-matching-works)
+13. [The --trace-artist diagnostic](#the---trace-artist-diagnostic)
+14. [NAVIDROME_MUSIC_FOLDER](#navidrome_music_folder)
+15. [Cache management](#cache-management)
+16. [Troubleshooting](#troubleshooting)
+17. [FAQ](#faq)
 
 ---
 
@@ -56,7 +59,7 @@ Python 3.12 is required. Check with `python3 --version`. On macOS, use [pyenv](h
 ### 2. Create and activate a virtualenv
 
 ```bash
-cd /path/to/Scripts/missing_popular_albums
+cd /path/to/Scripts/cratedigger
 python3.12 -m venv .venv
 source .venv/bin/activate
 ```
@@ -111,75 +114,73 @@ If it scans artists, hits Last.fm, and writes an HTML file, you're good. The `--
 
 ## Setup — Docker
 
-<p align="center">
-  <img src="screenshots/login.png" alt="Cratedigger login page" width="360">
-</p>
+The compose file is `docker-compose.yaml` in the project root. It uses the pre-built image from GitHub Container Registry — no local build required.
 
-The compose file lives at `Docker/music-reports/docker-compose.yaml`. It builds the image from `Scripts/missing_popular_albums/`.
+### 1. Configure
 
-### 1. Create the Docker env file
+```bash
+cp .env.example .env
+```
 
-Create `Docker/music-reports/.env` with at minimum:
+Open `.env` and fill in at minimum:
 
 ```dotenv
 # Required
 LASTFM_API_KEY=your_key_here
 AUTH_PASS=choose_a_strong_password
+SECRET_KEY=any_long_random_string
 
-# Navidrome
+# Navidrome (recommended)
 NAVIDROME_URL=https://navidrome.example.com
 NAVIDROME_USER=youruser
 NAVIDROME_PASS=yourpass
-NAVIDROME_MUSIC_FOLDER=music_main   # or leave empty to scan all
 
-# Optional schedules (cron format, 5 fields)
-SCHEDULE_MISSING=0 3 * * 0
-SCHEDULE_DISCOVER=0 4 * * 0
+# Optional: restrict to one Navidrome library
+# NAVIDROME_MUSIC_FOLDER=music_main
 
-# Streaming previews (optional)
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-YOUTUBE_API_KEY=
+# Optional: cron schedules
+# SCHEDULE_MISSING=0 3 * * 0
+# SCHEDULE_DISCOVER=0 4 * * 0
 
-# SLSKD integration (optional)
-SLSKD_URL=https://slskd.yourdomain.com
-SLSKD_API_KEY=your-api-key
+# Optional: streaming previews
+# SPOTIFY_CLIENT_ID=
+# SPOTIFY_CLIENT_SECRET=
+# YOUTUBE_API_KEY=
 
-# From Docker/_defaults/default.env — set these if they're not inherited
-TZ=America/Los_Angeles
-DPATH=/opt/docker/appdata
-NASPATH=/media/NAS
+# Optional: New & Trending sources (default: all three)
+# TRENDING_FEEDS=spotify,lastfm,bandcamp
+# LASTFM_API_KEY is reused for the trending chart feed
+
+# Optional: SLSKD integration
+# SLSKD_URL=https://slskd.yourdomain.com
+# SLSKD_API_KEY=your-api-key
 ```
 
-Variables inherited from `Docker/_defaults/default.env` (PROXYNETWORK, WATCHTOWER, HP_*, PORT_INTERNAL, DOMAIN_NAME, SERVICE_NAME, PROXY_ENTRYPOINT, PROXY_ENTRYPOINT_SECURE) must be available in the shell environment or in the defaults env file when you run compose.
-
-### 2. Start the container
+### 2. Start
 
 ```bash
-cd Docker/music-reports
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 ### 3. Verify
 
 ```bash
-docker logs -f music-reports
-curl http://localhost:5099/healthz
+docker logs -f cratedigger
+curl http://localhost:8080/healthz
 ```
 
-The health check endpoint returns `{"status": "ok"}` with no authentication.
+The health check returns `{"status": "ok"}` with no authentication required.
 
 ### Data persistence
 
-The compose file mounts two volumes:
+The compose file creates a named Docker volume (`cratedigger-data`) mounted at `/data` inside the container. This holds all reports, cache files, logs, and your dismissed items list. The volume persists across container restarts and image updates.
 
-- `${DPATH}/music-reports/data` → `/data` (read-write) — stores all reports, cache files, and logs. This directory must exist on the host before the first run.
-- `${NASPATH}/Media/Music` → `/music` (read-only) — the NAS music folder, used when Navidrome is not configured.
+To mount a local music folder (only needed if you're not using Navidrome):
 
-Create the data directory if needed:
-
-```bash
-mkdir -p /opt/docker/appdata/music-reports/data
+```yaml
+# Uncomment in docker-compose.yaml:
+- /path/to/your/music:/music:ro
 ```
 
 ---
@@ -215,7 +216,7 @@ Controls how candidates discovered via `artist.getSimilar` are scored and filter
 | Value | Behavior |
 |-------|----------|
 | `lastfm` (default) | Candidates are sorted by Last.fm's collaborative-filtering match score (shared listener overlap). `DISCOVER_TAG_OVERLAP` applies as a post-filter. |
-| `tags` | Candidates are re-scored by **Jaccard genre-tag similarity** — the ratio of shared genre tags to total distinct genre tags between the candidate and its source artists. Any candidate with zero tag overlap is hard-excluded, regardless of `DISCOVER_TAG_OVERLAP`. Results are sorted by Jaccard score descending. |
+| `tags` | Candidates are re-scored by Jaccard genre-tag similarity — the ratio of shared genre tags to total distinct genre tags between the candidate and its source artists. Any candidate with zero tag overlap is excluded, regardless of `DISCOVER_TAG_OVERLAP`. Results are sorted by Jaccard score descending. |
 
 Use `tags` mode if you're seeing cross-genre mismatches — for example, an ambient artist appearing alongside hip-hop suggestions. Last.fm's listener overlap can produce these because audiences sometimes cross genre lines even when the music doesn't.
 
@@ -225,7 +226,7 @@ The minimum number of matching genre tags required to keep a similar-artist cand
 
 Set to `0` to disable genre filtering entirely — every candidate from `artist.getSimilar` passes through as long as they're not already in your collection.
 
-Set to `2` or higher for stricter genre alignment. Useful if you're getting suggestions that are similar to one of your artists in Last.fm's model but don't match the kind of music you actually want.
+Set to `2` or higher for stricter genre matching. Useful if you're getting suggestions that are similar to one of your artists in Last.fm's model but don't match the kind of music you actually want.
 
 In `tags` mode this setting is ignored — the Jaccard score threshold (>0.0) is always enforced.
 
@@ -233,33 +234,36 @@ In `tags` mode this setting is ignored — the Jaccard score threshold (>0.0) is
 
 How many candidates are collected per local artist before deduplication. The default of 2 means each artist in your library contributes at most 2 new candidates to the global pool. Last.fm returns similar artists in descending similarity order, so only the strongest candidates are taken.
 
+### TRENDING_FEEDS
+
+Comma-separated list of sources for the New & Trending section. Default: `spotify,lastfm,bandcamp`. Valid values: `spotify`, `lastfm`, `bandcamp`. Removing a source from the list disables it entirely.
+
+`spotify` requires `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`. `lastfm` reuses `LASTFM_API_KEY`. `bandcamp` needs no credentials.
+
 ---
 
 ## Using the web dashboard
 
-<p align="center">
-  <img src="screenshots/RunDashboard.png" alt="Run Dashboard" width="640">
-</p>
+Open the dashboard at `http://localhost:8080/dashboard` (or your configured domain). You'll be prompted to log in with `AUTH_USER` / `AUTH_PASS`.
 
-Open the dashboard at your configured domain (or `http://localhost:5099` for local access). You'll be prompted for HTTP Basic Auth credentials (`AUTH_USER` / `AUTH_PASS`).
+The dashboard has three job panels: Missing Popular Albums, Discover Similar Artists, and New & Trending. Each panel shows:
 
-The dashboard has two job panels, one per script. Each shows:
-
-- A status badge: `idle`, `running`, `succeeded`, or `failed`. Both start idle on first launch.
-- A **Run Now** button that triggers the script immediately. It's disabled while a job is running. Clicking it when the job is already running — e.g., from a scheduled trigger — returns 409 and does nothing.
+- A status badge: `idle`, `running`, `succeeded`, or `failed`. All start idle on first launch.
+- A Run Now button that triggers the script immediately. It is disabled while a job is running. Clicking it when the job is already running returns 409 and does nothing.
 - A live log area. When a job starts, the dashboard opens an SSE connection and streams log output line by line. If you reload mid-run, it replays the buffered output (up to 2000 lines) before resuming live.
-- A **View in Viewer** link that appears once JSON output is available. Opens the combined report viewer.
 - Next run time below each panel when a schedule is configured.
+
+A **Run All** button at the top triggers all three jobs at once. It is disabled while any job is running.
 
 ---
 
 ## Viewer features
 
-The Report Viewer (`/`) combines both reports into a single paginated card interface.
+The Report Viewer (`/`) combines all three reports into a single paginated card interface.
 
 ### Navigation
 
-Each section (Discover Similar Artists, Missing Popular Albums) has its own Prev / Next pager. Pagination is AJAX — clicking Prev/Next replaces the cards in-place without a full page reload. The URL updates to reflect the current page, and browser back/forward navigation works correctly.
+Each section (Discover Similar Artists, Missing Popular Albums, New & Trending) has its own Prev / Next pager. Pagination is AJAX — clicking Prev/Next replaces the cards in-place without a full page reload. The URL updates to reflect the current page, and browser back/forward navigation works correctly.
 
 ### Streaming preview
 
@@ -271,19 +275,19 @@ Hovering over album art reveals circular service icons centered on the image. Cl
 
 Only one player is open at a time — opening a second automatically closes the first.
 
-**Service setup:**
+Service setup:
 
 | Service | Credentials needed | Notes |
 |---|---|---|
 | Apple Music | None | Works immediately. Uses iTunes Search API + Apple Music embed. |
 | Spotify | `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` | Requires a Spotify developer app (Spotify Premium account needed as of Feb 2026). |
-| YouTube | `YOUTUBE_API_KEY` | Must be a **YouTube Data API v3** key. In Google Cloud Console, go to APIs & Services → Library → search "YouTube Data API v3" → Enable. A key created only for the IFrame Player API will not work. |
+| YouTube | `YOUTUBE_API_KEY` | Must be a YouTube Data API v3 key. In Google Cloud Console, go to APIs & Services > Library > search "YouTube Data API v3" > Enable. A key created only for the IFrame Player API will not work. |
 
-After adding credentials to `Docker/music-reports/.env`, restart the container (`docker compose down && docker compose up -d`) — no rebuild required.
+After adding credentials to `.env`, restart the container (`docker compose down && docker compose up -d`) — no rebuild required.
 
 ### SLSKD search queue
 
-When SLSKD integration is configured, each card shows a **SLSKD** button in the action bar. Clicking it sends a search request directly to your running SLSKD instance via its REST API — no copy-paste, no tab-switching. The search appears in the SLSKD UI immediately for you to browse results and queue downloads.
+When SLSKD integration is configured, each card shows a SLSKD button in the action bar. Clicking it sends a search request directly to your running SLSKD instance via its REST API — no copy-paste, no tab-switching. The search appears in the SLSKD UI immediately for you to browse results and queue downloads.
 
 Set `SLSKD_URL` and either `SLSKD_API_KEY` or `SLSKD_USER` / `SLSKD_PASS` in your `.env` to enable the button. The API key approach is simpler: add a key to `appsettings.yml` under `web.authentication.api_keys` in SLSKD.
 
@@ -291,11 +295,11 @@ After adding credentials, restart the container — no rebuild required.
 
 ### Copy button
 
-Each card has a **Copy** button that copies the artist name and album title to the clipboard (e.g., `Radiohead OK Computer`). Useful for searching in a music store or download manager.
+Each card has a Copy button that copies the artist name and album title to the clipboard (e.g., `Radiohead OK Computer`). Useful for searching in a music store or download manager.
 
 ### Dismiss
 
-The **✕** button on each card permanently hides it from the viewer. Dismissed items are stored in `/data/dismissed.json` (inside the Docker volume, so they survive container restarts and rebuilds). They are also excluded when the scripts run — so a re-run won't re-surface albums you've already dismissed.
+The ✕ button on each card permanently hides it from the viewer. Dismissed items are stored in `/data/dismissed.json` (inside the Docker volume, so they survive container restarts and rebuilds). They are also excluded when the scripts run — so a re-run won't re-surface albums you've already dismissed.
 
 ### Triggering via API
 
@@ -303,13 +307,16 @@ You can trigger runs without the browser:
 
 ```bash
 # Trigger missing_popular_albums.py
-curl -X POST -u admin:yourpass https://music-reports.yourdomain.com/run/missing
+curl -X POST -u admin:yourpass https://cratedigger.yourdomain.com/run/missing
 
 # Trigger discover_similar_artists.py
-curl -X POST -u admin:yourpass https://music-reports.yourdomain.com/run/discover
+curl -X POST -u admin:yourpass https://cratedigger.yourdomain.com/run/discover
+
+# Refresh the New & Trending section
+curl -X POST -u admin:yourpass https://cratedigger.yourdomain.com/run/trending
 
 # Check status
-curl -u admin:yourpass https://music-reports.yourdomain.com/status/missing
+curl -u admin:yourpass https://cratedigger.yourdomain.com/status/missing
 ```
 
 The status response looks like:
@@ -324,6 +331,34 @@ The status response looks like:
   "exit_code": 0
 }
 ```
+
+---
+
+## New & Trending section
+
+The Report Viewer's third section shows new releases pulled from up to three sources:
+
+- Spotify — new releases via the Spotify new-releases API (requires `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET`)
+- Last.fm — top chart artists via `chart.getTopArtists` with their most popular album from `artist.getTopAlbums` (requires `LASTFM_API_KEY`)
+- Bandcamp — editorial picks from the Bandcamp Daily RSS feed (no credentials needed)
+
+The active sources are controlled by `TRENDING_FEEDS` in your `.env`. Remove a source name from the comma-separated list to disable it.
+
+Results from all active sources are merged by interleaving (for variety) and deduplicated on a normalized artist+album key. Albums already in your Navidrome library are automatically filtered out. The section refreshes every hour. To force a refresh, use the Run Now button on the New & Trending dashboard panel, or POST to `/run/trending`.
+
+---
+
+## Full-page section view
+
+Clicking a section title ("Discover Similar Artists", "Missing Popular Albums", or "New & Trending") in the Report Viewer opens a full-page view at `/section/{section}`. All items are shown in a single scrollable list — no pagination. A back link at the top returns to the main viewer.
+
+Dismiss buttons work the same way on the full-page view.
+
+---
+
+## Mobile support
+
+The navigation bar adapts at 640px and 480px breakpoints. The version label is hidden below 640px; the GitHub icon is hidden below 480px. Dashboard cards stack to full width below 480px. Album card action buttons have larger tap targets on mobile.
 
 ---
 
@@ -447,9 +482,9 @@ If Navidrome returns no songs for an album (unlikely but possible), the tool pri
 
 If you have multiple libraries in Navidrome (e.g., a main music library and a classical library), `NAVIDROME_MUSIC_FOLDER` restricts the scan to one of them. Without it, every library gets scanned, which can pull in artists you didn't intend to include.
 
-**How to find your library name:** In Navidrome, go to Settings > Libraries. The name shown there is what to use. The match is case-insensitive.
+To find your library name: in Navidrome, go to Settings > Libraries. The name shown there is what to use. The match is case-insensitive.
 
-**What happens if the name is wrong:** The script calls `getMusicFolders`, tries to resolve the name, and aborts immediately if nothing matches:
+If the name is wrong, the script calls `getMusicFolders`, tries to resolve the name, and aborts immediately if nothing matches:
 
 ```
 ERROR: NAVIDROME_MUSIC_FOLDER='music_main' not found. Available: Music Server, Classical
@@ -457,7 +492,7 @@ ERROR: NAVIDROME_MUSIC_FOLDER='music_main' not found. Available: Music Server, C
 
 This is by design. A silent fallback to all libraries could produce a report that mixes libraries you didn't want combined — better to fail loudly.
 
-**Leaving it empty:** If `NAVIDROME_MUSIC_FOLDER` is not set or is empty, the scan queries all libraries without passing a `musicFolderId` to `getAlbumList2`.
+If `NAVIDROME_MUSIC_FOLDER` is not set or is empty, the scan queries all libraries without passing a `musicFolderId` to `getAlbumList2`.
 
 ---
 
@@ -494,7 +529,7 @@ rm .cache/similar_artists.json     # discover_similar_artists
 
 Or run with `--no-cache` to ignore the cache for one run without deleting it. Fresh data is written back either way.
 
-In Docker, the cache lives at `/data/.cache/` inside the container, which maps to `${DPATH}/music-reports/data/.cache/` on the host.
+In Docker, the cache lives at `/data/.cache/` inside the container. The `cratedigger-data` Docker volume keeps it intact across restarts and image updates.
 
 ### Cache size
 
@@ -532,11 +567,11 @@ These log as `Rate limited by Last.fm`. The client retries with exponential back
 
 ### Docker container exits immediately
 
-Check `docker logs music-reports`. Common causes:
+Check `docker logs cratedigger`. Common causes:
 
-- Port 5099 is already in use. Change the host-side port in the compose file.
+- Port 8080 is already in use. Change the host-side port in the compose file.
 - Missing env vars causing an import error. Check whether required variables are set.
-- Note: an empty `AUTH_PASS` does not crash the container — it just rejects every login. Verify by hitting the health check endpoint: `curl http://localhost:5099/healthz`.
+- Note: an empty `AUTH_PASS` does not crash the container — it just rejects every login. Verify by hitting the health check endpoint: `curl http://localhost:8080/healthz`.
 
 ### discover_similar_artists.py returns far fewer results than expected
 
