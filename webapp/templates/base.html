@@ -147,6 +147,32 @@
   {% block content %}{% endblock %}
 
 <script>
+async function imgFallback(img) {
+  img.onerror = null;
+  const artist = img.dataset.artist || '';
+  const album  = img.dataset.album  || '';
+  if (artist && album) {
+    try {
+      const q = encodeURIComponent(`${artist} ${album}`);
+      const r = await fetch(
+        `https://itunes.apple.com/search?term=${q}&entity=album&limit=1&media=music`
+      );
+      if (r.ok) {
+        const result = (await r.json()).results?.[0];
+        if (result?.artworkUrl100) {
+          img.src = result.artworkUrl100.replace('100x100bb', '600x600bb');
+          return;
+        }
+      }
+    } catch {}
+  }
+  img.style.display = 'none';
+  const ph = document.createElement('div');
+  ph.className = 'card-img-placeholder';
+  ph.textContent = 'No Artwork';
+  img.after(ph);
+}
+
 (async () => {
   const el = document.getElementById('nav-version');
   if (!el) return;
