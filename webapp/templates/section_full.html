@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section_title }} — Cratedigger{% endblock %}
+{% block nav_active_viewer %}active{% endblock %}
+
+{% block head_css %}
+{% include "_card_styles.html" %}
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      font-size: .82rem;
+      color: #555;
+      text-decoration: none;
+      margin-bottom: 1.25rem;
+    }
+    .back-link:hover { color: #aaa; }
+    .full-section-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+{% endblock %}
+
+{% block content %}
+<div id="toast-container"></div>
+<div class="page-wrap">
+  <a class="back-link" href="/#section-{{ section }}">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    Report Viewer
+  </a>
+  <h1 class="full-section-title">{{ section_title }}</h1>
+
+  {% include "_section_cards.html" %}
+</div>
+
+<script>
+  let _activePlayerBtn = null;
+
+  function _closeActivePlayer() {
+    if (!_activePlayerBtn) return;
+    const wrap = _activePlayerBtn.closest('.card-image-wrap');
+    wrap.classList.remove('player-open', 'player-apple', 'player-spotify', 'player-youtube');
+    wrap.querySelector('.card-player').style.display = 'none';
+    wrap.querySelector('.card-player iframe').src = '';
+    const art = wrap.querySelector('.card-img, .card-img-placeholder');
+    if (art) art.style.display = '';
+    _activePlayerBtn = null;
+  }
+
+  function closePlayer(closeBtn) {
+    _closeActivePlayer();
+  }
+
+  async function streamCard(btn) {
+    const wrap = btn.closest('.card-image-wrap');
+    const playerDiv = wrap.querySelector('.card-player');
+    const iframe = playerDiv.querySelector('iframe');
+
+    if (_activePlayerBtn === btn) { _closeActivePlayer(); return; }
+    _closeActivePlayer();
+
+    const artist  = encodeURIComponent(btn.dataset.artist);
+    const album   = encodeURIComponent(btn.dataset.album);
+    const service = btn.dataset.service;
+
+    btn.classList.add('loading');
+    try {
+      const res  = await fetch(`/api/stream-info?artist=${artist}&album=${album}&service=${service}`);
+      const data = await res.json();
+      if (!data.found) {
+        btn.classList.add('not-found');
+        setTimeout(() => btn.classList.remove('not-found'), 1500);
+        return;
+      }
+      iframe.src = data.embed_url;
+      playerDiv.style.display = 'block';
+      wrap.classList.add('player-open', `player-${service}`);
+      const art = wrap.querySelector('.card-img, .card-img-placeholder');
+      if (art) art.style.display = 'none';
+      _activePlayerBtn = btn;
+    } finally {
+      btn.classList.remove('loading');
+    }
+  }
+
+  async function dismissCard(btn) {
+    const card = btn.closest('.report-card');
+    const type = btn.dataset.dismissType;
+    const key  = btn.dataset.dismissKey;
+    const res  = await fetch('/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, key }),
+    });
+    if (!res.ok) { console.error('Dismiss failed'); return; }
+    card.remove();
+  }
+
+  function showToast(message, type) {
+    const container = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    t.textContent = message;
+    container.appendChild(t);
+    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
+    setTimeout(() => {
+      t.classList.remove('show');
+      t.addEventListener('transitionend', () => t.remove(), { once: true });
+    }, 3000);
+  }
+
+  async function sendToSlskd(btn) {
+    const artist = btn.dataset.artist;
+    const album  = btn.dataset.album;
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/slskd-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artist, album }),
+      });
+      if (res.ok) {
+        btn.classList.add('queued');
+        showToast(`Queued: ${artist} — ${album}`, 'ok');
+      } else {
+        btn.classList.add('err');
+        showToast('SLSKD search failed', 'err');
+      }
+      setTimeout(() => btn.classList.remove('queued', 'err'), 2000);
+    } catch {
+      btn.classList.add('err');
+      setTimeout(() => btn.classList.remove('err'), 2000);
+      showToast('Could not reach SLSKD', 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function copyText(text) {
+    navigator.clipboard.writeText(text).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    });
+  }
+</script>
+{% endblock %}

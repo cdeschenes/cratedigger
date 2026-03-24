@@ -10,7 +10,7 @@
   {% endif %}
 </div>
 
-{% if total > 0 %}
+{% if total > 0 and (show_pager is not defined or show_pager) %}
 <div class="pager">
   <button class="pager-btn {% if page <= 1 %}disabled{% endif %}" onclick="loadSection('{{ section }}', {{ page - 1 }})">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>

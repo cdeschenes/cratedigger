@@ -12,6 +12,7 @@ Routes:
   POST /run/{job_id}             — trigger a script run
   GET  /status/{job_id}          — JSON job status
   GET  /logs/{job_id}            — SSE log stream
+  GET  /section/{section}        — full scrollable view of one section (all items)
   GET  /api/section/{section}    — AJAX partial: card grid + pager for one section
   POST /api/trending/refresh     — force-refresh the trending cache
   POST /api/slskd-search         — queue a search on a running SLSKD instance
@@ -299,6 +300,54 @@ async def viewer(
             "trending_feeds_enabled": bool(TRENDING_FEEDS),
             "enabled_services": ENABLED_SERVICES,
             "slskd_enabled": SLSKD_ENABLED,
+        },
+    )
+
+
+# ── Full section page ─────────────────────────────────────────────────────────
+
+@app.get("/section/{section}")
+async def section_full_view(
+    section: str,
+    request: Request,
+    _: str = Depends(require_auth),
+):
+    if section not in ("discover", "missing", "trending"):
+        raise HTTPException(status_code=404, detail="Unknown section")
+
+    dismissed = load_dismissed()
+    items_all: list | None = None
+    generated_at: str | None = None
+    dismissed_count = 0
+
+    if section == "trending":
+        raw_items = await get_trending()
+        items_all, dismissed_count = _apply_dismissed(raw_items, "trending", dismissed)
+    else:
+        report = load_json_report(section)
+        if report:
+            generated_at = report.get("generated_at")
+            raw_items = report.get("items", [])
+            items_all, dismissed_count = _apply_dismissed(raw_items, section, dismissed)
+
+    total = len(items_all) if items_all is not None else 0
+
+    return templates.TemplateResponse(
+        request,
+        "section_full.html",
+        {
+            "version": __version__,
+            "section": section,
+            "section_title": JOB_LABELS[section],
+            "items": items_all or [],
+            "page": 1,
+            "pages": 1,
+            "total": total,
+            "dismissed_count": dismissed_count,
+            "generated_at": generated_at,
+            "enabled_services": ENABLED_SERVICES,
+            "slskd_enabled": SLSKD_ENABLED,
+            "show_pager": False,
         },
     )
 

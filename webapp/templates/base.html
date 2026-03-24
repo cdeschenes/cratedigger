@@ -96,6 +96,17 @@
     }
     .nav-signout:hover { color: #e0e0e0; }
 
+    @media (max-width: 640px) {
+      .topnav { padding: 0 1rem; }
+      .nav-brand { margin-right: .75rem; }
+      .nav-link { padding: .35rem .5rem; font-size: .8rem; }
+      .nav-version { display: none; }
+    }
+    @media (max-width: 480px) {
+      .nav-github { display: none; }
+      .nav-signout { font-size: .75rem; }
+    }
+
     {% block head_css %}{% endblock %}
   </style>
   {% block head %}{% endblock %}
