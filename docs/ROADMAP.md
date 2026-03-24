@@ -25,18 +25,16 @@ Add a third section to the viewer landing page that aggregates new and trending 
 - Would appear below the two existing sections (Discover Similar Artists, Missing Popular Albums) as a separate card grid.
 - Data sourced from RSS/Atom feeds — no scripts need to run; the webapp fetches and caches them on demand.
 - Proposed sources (all have RSS or discoverable feeds):
-  - Discogs New Releases (user dashboard feed)
-  - Turntable Lab
-  - Bandcamp Discover
-  - Fat Beats
-  - Rough Trade
-  - Erased Tapes
-  - LUNA Music
-  - Thrill Jockey Records
-  - Lex Records
-  - Wax Trax! Records
-  - Further Records
-  - secretambient.club
+  - Discogs New Releases (user dashboard feed) - https://www.discogs.com/search/?sort=nfm&type=release
+  - Turntable Lab - https://us6.campaign-archive.com/feed
+  - Bandcamp Discover - https://daily.bandcamp.com/album-of-the-day
+  - Rough Trade - https://manage.kmail-lists.com/subscriptions/web-view
+  - Erased Tapes - https://www.erasedtapes.com/releases
+  - LUNA Music - https://shop.lunamusic.net
+  - Thrill Jockey Records - https://www.thrilljockey.com/index
+  - Lex Records - https://lexrecords.com/releases/
+  - Further Records - https://furtherrecords.com/collections/new-arrivals
+  - secretambient.club - https://secretambient.club
 - Implementation sketch:
   - New `GET /api/trending` endpoint in `app.py` — fetches and merges RSS feeds, caches results for ~1 hour in memory to avoid hammering sources on every page load.
   - `feedparser` (or `httpx` + manual XML parse) for feed ingestion.

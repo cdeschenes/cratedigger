@@ -27,3 +27,6 @@ output/
 tests/
 pytest.ini
 requirements-dev.txt
+
+# Local planning/scratchpad docs
+DISCOVERY_PLAN.md
