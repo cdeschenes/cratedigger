@@ -1,6 +1,6 @@
 services:
   cratedigger:
-    build: .
+    image: ghcr.io/cdeschenes/cratedigger:latest
     container_name: cratedigger
     restart: unless-stopped
     ports:
