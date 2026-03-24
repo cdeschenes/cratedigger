@@ -3,7 +3,7 @@
 #}
 <div class="section-meta-bar">
   <span class="section-meta">
-    {{ total }} {% if section == "discover" %}suggestions{% else %}albums{% endif %}{% if dismissed_count > 0 %} &middot; {{ dismissed_count }} dismissed{% endif %}
+    {{ total }} {% if section == "discover" %}suggestions{% elif section == "trending" %}releases{% else %}albums{% endif %}{% if dismissed_count > 0 %} &middot; {{ dismissed_count }} dismissed{% endif %}
   </span>
   {% if generated_at %}
   <span class="section-meta-ts">{{ generated_at | datetimeformat }}</span>
@@ -130,6 +130,112 @@
       </div>
     </div>
   </div>
+  {% elif section == "trending" %}
+  <div class="report-card">
+    <div class="card-image-wrap">
+      {% if item.image_url %}
+      <img class="card-img" src="{{ item.image_url }}" alt="{{ item.album_title }}" loading="lazy">
+      {% else %}
+      <div class="card-img-placeholder">No Artwork</div>
+      {% endif %}
+      {# Source badge — replaces score badge #}
+      <span class="score-badge" style="{% if item.source == 'spotify' %}background:rgba(10,40,20,.92);color:#1DB954{% elif item.source == 'lastfm' %}background:rgba(40,10,10,.92);color:#e0454a{% else %}background:rgba(10,20,40,.92);color:#1da0c3{% endif %}">
+        {% if item.source == "spotify" %}Spotify{% elif item.source == "lastfm" %}Last.fm{% else %}Bandcamp{% endif %}
+      </span>
+      {% set _stream_artist = item.artist_display %}
+      {% set _stream_album  = item.album_title %}
+      {% if _stream_artist and _stream_album %}
+      <div class="stream-icons">
+        {% if enabled_services.apple %}
+        <button class="stream-btn" data-service="apple"
+                data-artist="{{ _stream_artist }}" data-album="{{ _stream_album }}"
+                onclick="streamCard(this)" title="Apple Music">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
+        </button>
+        {% endif %}
+        {% if enabled_services.spotify %}
+        <button class="stream-btn" data-service="spotify"
+                data-artist="{{ _stream_artist }}" data-album="{{ _stream_album }}"
+                onclick="streamCard(this)" title="Spotify">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.623.623 0 0 1-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.623.623 0 1 1-.277-1.215c3.809-.87 7.076-.496 9.712 1.115.294.18.387.563.207.857zm1.223-2.723a.78.78 0 0 1-1.072.257c-2.687-1.652-6.785-2.131-9.965-1.166a.78.78 0 1 1-.453-1.492c3.633-1.103 8.147-.569 11.233 1.329.37.227.484.71.257 1.072zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.937.937 0 1 1-.543-1.793c3.498-1.059 9.318-.855 12.998 1.35a.937.937 0 0 1-.838 1.599z"/></svg>
+        </button>
+        {% endif %}
+        {% if enabled_services.youtube %}
+        <button class="stream-btn" data-service="youtube"
+                data-artist="{{ _stream_artist }}" data-album="{{ _stream_album }}"
+                onclick="streamCard(this)" title="YouTube">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+        </button>
+        {% endif %}
+      </div>
+      <div class="card-player">
+        <button class="player-close" onclick="closePlayer(this)" title="Close">×</button>
+        <iframe src="" frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen loading="lazy"></iframe>
+      </div>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      {% if item.artist_display %}
+      <span class="card-artist">{{ item.artist_display }}</span>
+      {% endif %}
+      <div class="card-album" style="color:#e0e0e0;font-weight:600">{{ item.album_title }}</div>
+      {% if item.release_date %}
+      <div class="card-year">{{ item.release_date }}</div>
+      {% endif %}
+    </div>
+    <div class="card-actions">
+      <div class="card-links">
+        {% if item.source_url %}
+        <a class="link-btn" href="{{ item.source_url }}" target="_blank" rel="noopener"
+           title="{% if item.source == 'spotify' %}Spotify{% elif item.source == 'lastfm' %}Last.fm{% else %}Bandcamp Daily{% endif %}">
+          {% if item.source == "spotify" %}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.623.623 0 0 1-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.623.623 0 1 1-.277-1.215c3.809-.87 7.076-.496 9.712 1.115.294.18.387.563.207.857zm1.223-2.723a.78.78 0 0 1-1.072.257c-2.687-1.652-6.785-2.131-9.965-1.166a.78.78 0 1 1-.453-1.492c3.633-1.103 8.147-.569 11.233 1.329.37.227.484.71.257 1.072zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.937.937 0 1 1-.543-1.793c3.498-1.059 9.318-.855 12.998 1.35a.937.937 0 0 1-.838 1.599z"/></svg>
+          {% elif item.source == "lastfm" %}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          {% else %}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg>
+          {% endif %}
+        </a>
+        {% endif %}
+        <a class="link-btn" href="{{ item.discogs_url }}" target="_blank" rel="noopener" title="Discogs">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+        </a>
+        <a class="link-btn" href="{{ item.bandcamp_url }}" target="_blank" rel="noopener" title="Bandcamp">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg>
+        </a>
+        <a class="link-btn" href="{{ item.youtube_url }}" target="_blank" rel="noopener" title="YouTube Music">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </a>
+      </div>
+      <div class="card-action-row">
+        {% if item.artist_display and item.album_title %}
+        <button class="action-btn"
+                data-copy="{{ item.artist_display }} {{ item.album_title }}"
+                onclick="copyText(this.dataset.copy)" title="Copy artist &amp; album">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          Copy
+        </button>
+        {% endif %}
+        {% if slskd_enabled and item.artist_display and item.album_title %}
+        <button class="action-btn btn-slskd"
+                data-artist="{{ item.artist_display }}"
+                data-album="{{ item.album_title }}"
+                onclick="sendToSlskd(this)" title="Search on SLSKD">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          SLSKD
+        </button>
+        {% endif %}
+        <button class="action-btn btn-dismiss"
+                data-dismiss-type="trending"
+                data-dismiss-key="{{ item.artist_normalized }}|{{ item.album_normalized }}"
+                onclick="dismissCard(this)" title="Dismiss">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
   {% else %}
   <div class="report-card">
     <div class="card-image-wrap">
@@ -226,7 +332,13 @@
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" stroke-width="1.5" style="margin:0 auto .75rem;display:block">
     <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
   </svg>
-  <strong style="color:#555">All caught up</strong>
-  <p>{{ dismissed_count }} suggestion{% if dismissed_count != 1 %}s{% endif %} dismissed. Re-run the script to find new ones.</p>
+  <strong style="color:#555">{% if section == "trending" %}No releases found{% else %}All caught up{% endif %}</strong>
+  <p>
+    {% if section == "trending" %}
+    {{ dismissed_count }} dismissed. Click Refresh to fetch the latest releases.
+    {% else %}
+    {{ dismissed_count }} suggestion{% if dismissed_count != 1 %}s{% endif %} dismissed. Re-run the script to find new ones.
+    {% endif %}
+  </p>
 </div>
 {% endif %}

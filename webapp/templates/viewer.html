@@ -464,11 +464,43 @@
     {% endif %}
   </div>
 
+  {% if trending_feeds_enabled %}
+  <hr class="section-divider">
+
+  {# ── New & Trending ── #}
+  <div id="section-trending" class="section">
+    <div class="section-header" style="display:flex;align-items:center;gap:.75rem">
+      <h2 id="section-trending-heading" class="section-title">New &amp; Trending</h2>
+      <button class="action-btn" onclick="refreshTrending()" style="font-size:.7rem;padding:.2rem .5rem" title="Fetch latest releases">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+    </div>
+
+    <div id="section-trending-content">
+      {% if trending_items is none %}
+      <div class="empty-state">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" stroke-width="1.5" style="margin:0 auto .75rem;display:block">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>
+        </svg>
+        <strong style="color:#555">No releases yet</strong>
+        <p>Click <strong>Refresh</strong> to fetch the latest releases.</p>
+      </div>
+      {% else %}
+      {% with section="trending", items=trending_items, page=t_page, pages=t_pages, total=t_total, dismissed_count=t_dismissed_count, generated_at=t_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled %}
+      {% include "_section_cards.html" %}
+      {% endwith %}
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
 </div>
 
 <script>
   let dPage = {{ d_page }};
   let mPage = {{ m_page }};
+  let tPage = {{ t_page }};
 
   // ── Streaming player ──────────────────────────────────────────────────────
   let _activePlayerBtn = null;
@@ -523,16 +555,22 @@
   // ─────────────────────────────────────────────────────────────────────────
 
   async function loadSection(section, page) {
-    const otherPage = section === "discover" ? mPage : dPage;
-    const url = `/api/section/${section}?page=${page}&other_page=${otherPage}`;
+    const url = `/api/section/${section}?page=${page}`;
     const res = await fetch(url);
     if (!res.ok) { console.error("Section load failed"); return; }
     document.getElementById(`section-${section}-content`).innerHTML = await res.text();
-    if (section === "discover") dPage = page; else mPage = page;
+    if (section === "discover") dPage = page;
+    else if (section === "missing") mPage = page;
+    else tPage = page;
     document.getElementById(`section-${section}-heading`)
             .scrollIntoView({ behavior: "smooth", block: "start" });
-    history.pushState({ d_page: dPage, m_page: mPage }, "",
-                      `/?d_page=${dPage}&m_page=${mPage}`);
+    history.pushState({ d_page: dPage, m_page: mPage, t_page: tPage }, "",
+                      `/?d_page=${dPage}&m_page=${mPage}&t_page=${tPage}`);
+  }
+
+  async function refreshTrending() {
+    const res = await fetch("/api/trending/refresh", { method: "POST" });
+    if (res.ok) await loadSection("trending", 1);
   }
 
   async function dismissCard(btn) {
@@ -546,7 +584,7 @@
     });
     if (!res.ok) { console.error("Dismiss failed"); return; }
     card.remove();
-    const currentPage = type === "discover" ? dPage : mPage;
+    const currentPage = type === "discover" ? dPage : (type === "missing" ? mPage : tPage);
     await loadSection(type, currentPage);
   }
 
@@ -609,6 +647,8 @@
       loadSection("discover", e.state.d_page);
     if (e.state.m_page !== undefined && e.state.m_page !== mPage)
       loadSection("missing", e.state.m_page);
+    if (e.state.t_page !== undefined && e.state.t_page !== tPage)
+      loadSection("trending", e.state.t_page);
   });
 </script>
 {% endblock %}

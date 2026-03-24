@@ -13,6 +13,7 @@ Routes:
   GET  /status/{job_id}          — JSON job status
   GET  /logs/{job_id}            — SSE log stream
   GET  /api/section/{section}    — AJAX partial: card grid + pager for one section
+  POST /api/trending/refresh     — force-refresh the trending cache
   POST /api/slskd-search         — queue a search on a running SLSKD instance
   POST /dismiss                  — add item to dismissed list
   DELETE /dismiss                — remove item from dismissed list
@@ -41,6 +42,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from webapp.auth import NotAuthenticatedException, check_credentials, require_auth
 from webapp.runner import get_all_status, get_status, run_job, stream_logs
 from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
+from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
+from webapp.trending import TRENDING_FEEDS, get_trending
 
 __version__ = "1.1.0"
 
@@ -58,6 +61,7 @@ REPORT_FILES: dict[str, str] = {
 JSON_FILES: dict[str, str] = {
     "missing": "missing_popular_albums.json",
     "discover": "discover_similar_artists.json",
+    "trending": "trending_albums.json",
 }
 
 JOB_LABELS: dict[str, str] = {
@@ -69,18 +73,15 @@ DISMISSED_FILE = DATA_DIR / "dismissed.json"
 
 # ── Streaming config ──────────────────────────────────────────────────────────
 
-_SPOTIFY_CLIENT_ID     = os.environ.get("SPOTIFY_CLIENT_ID", "")
-_SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
-_YOUTUBE_API_KEY       = os.environ.get("YOUTUBE_API_KEY", "")
+_YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 
 ENABLED_SERVICES = {
     "apple":   True,
-    "spotify": bool(_SPOTIFY_CLIENT_ID and _SPOTIFY_CLIENT_SECRET),
+    "spotify": SPOTIFY_ENABLED,
     "youtube": bool(_YOUTUBE_API_KEY),
 }
 
 _stream_cache: dict[tuple[str, str, str], str | None] = {}
-_spotify_token: dict = {}   # {"token": str, "expires_at": float}
 
 # ── SLSKD config ──────────────────────────────────────────────────────────────
 
@@ -115,15 +116,16 @@ def load_json_report(job_id: str) -> dict | None:
 
 def load_dismissed() -> dict[str, list[str]]:
     if not DISMISSED_FILE.exists():
-        return {"missing": [], "discover": []}
+        return {"missing": [], "discover": [], "trending": []}
     try:
         data = json.loads(DISMISSED_FILE.read_text(encoding="utf-8"))
         return {
             "missing": data.get("missing", []),
             "discover": data.get("discover", []),
+            "trending": data.get("trending", []),
         }
     except Exception:
-        return {"missing": [], "discover": []}
+        return {"missing": [], "discover": [], "trending": []}
 
 
 def save_dismissed(data: dict[str, list[str]]) -> None:
@@ -139,6 +141,12 @@ def _apply_dismissed(items: list, section: str, dismissed: dict) -> tuple[list, 
     if section == "discover":
         dismissed_set = set(dismissed["discover"])
         filtered = [i for i in items if i.get("candidate_normalized") not in dismissed_set]
+    elif section == "trending":
+        dismissed_set = set(dismissed["trending"])
+        filtered = [
+            i for i in items
+            if f"{i.get('artist_normalized')}|{i.get('album_normalized')}" not in dismissed_set
+        ]
     else:
         dismissed_set = set(dismissed["missing"])
         filtered = [
@@ -236,29 +244,37 @@ async def viewer(
     _: str = Depends(require_auth),
     d_page: int = 1,
     m_page: int = 1,
+    t_page: int = 1,
 ):
     discover_report = load_json_report("discover")
-    missing_report = load_json_report("missing")
+    missing_report  = load_json_report("missing")
+    # Trending: use persisted file for fast initial render (AJAX refreshes use live cache)
+    trending_report = load_json_report("trending") if TRENDING_FEEDS else None
     dismissed = load_dismissed()
 
-    # Apply dismissed filter
     d_items_raw = discover_report["items"] if discover_report else None
-    m_items_raw = missing_report["items"] if missing_report else None
+    m_items_raw = missing_report["items"]  if missing_report  else None
+    t_items_raw = trending_report["items"] if trending_report else ([] if TRENDING_FEEDS else None)
 
     d_items_all, d_dismissed_count = _apply_dismissed(d_items_raw, "discover", dismissed) if d_items_raw is not None else (None, 0)
-    m_items_all, m_dismissed_count = _apply_dismissed(m_items_raw, "missing", dismissed) if m_items_raw is not None else (None, 0)
+    m_items_all, m_dismissed_count = _apply_dismissed(m_items_raw, "missing",  dismissed) if m_items_raw is not None else (None, 0)
+    t_items_all, t_dismissed_count = _apply_dismissed(t_items_raw, "trending", dismissed) if t_items_raw is not None else (None, 0)
 
     d_total = len(d_items_all) if d_items_all is not None else 0
     m_total = len(m_items_all) if m_items_all is not None else 0
+    t_total = len(t_items_all) if t_items_all is not None else 0
 
     d_pages = max(1, -(-d_total // ITEMS_PER_PAGE))
     m_pages = max(1, -(-m_total // ITEMS_PER_PAGE))
+    t_pages = max(1, -(-t_total // ITEMS_PER_PAGE))
 
     d_page = max(1, min(d_page, d_pages))
     m_page = max(1, min(m_page, m_pages))
+    t_page = max(1, min(t_page, t_pages))
 
     d_start = (d_page - 1) * ITEMS_PER_PAGE
     m_start = (m_page - 1) * ITEMS_PER_PAGE
+    t_start = (t_page - 1) * ITEMS_PER_PAGE
 
     return templates.TemplateResponse(
         request,
@@ -266,17 +282,18 @@ async def viewer(
         {
             "version": __version__,
             "discover_items": d_items_all[d_start:d_start + ITEMS_PER_PAGE] if d_items_all is not None else None,
-            "missing_items": m_items_all[m_start:m_start + ITEMS_PER_PAGE] if m_items_all is not None else None,
-            "d_page": d_page,
-            "d_pages": d_pages,
-            "d_total": d_total,
+            "missing_items":  m_items_all[m_start:m_start + ITEMS_PER_PAGE] if m_items_all is not None else None,
+            "trending_items": t_items_all[t_start:t_start + ITEMS_PER_PAGE] if t_items_all is not None else None,
+            "d_page": d_page, "d_pages": d_pages, "d_total": d_total,
             "d_dismissed_count": d_dismissed_count,
             "d_generated_at": discover_report.get("generated_at") if discover_report else None,
-            "m_page": m_page,
-            "m_pages": m_pages,
-            "m_total": m_total,
+            "m_page": m_page, "m_pages": m_pages, "m_total": m_total,
             "m_dismissed_count": m_dismissed_count,
             "m_generated_at": missing_report.get("generated_at") if missing_report else None,
+            "t_page": t_page, "t_pages": t_pages, "t_total": t_total,
+            "t_dismissed_count": t_dismissed_count,
+            "t_generated_at": trending_report.get("generated_at") if trending_report else None,
+            "trending_feeds_enabled": bool(TRENDING_FEEDS),
             "enabled_services": ENABLED_SERVICES,
             "slskd_enabled": SLSKD_ENABLED,
         },
@@ -291,22 +308,24 @@ async def section_fragment(
     request: Request,
     _: str = Depends(require_auth),
     page: int = 1,
-    other_page: int = 1,
 ):
-    if section not in ("discover", "missing"):
+    if section not in ("discover", "missing", "trending"):
         raise HTTPException(status_code=404, detail="Unknown section")
 
-    report = load_json_report(section)
     dismissed = load_dismissed()
-
     items_all: list | None = None
     generated_at: str | None = None
     dismissed_count = 0
 
-    if report:
-        generated_at = report.get("generated_at")
-        raw_items = report.get("items", [])
-        items_all, dismissed_count = _apply_dismissed(raw_items, section, dismissed)
+    if section == "trending":
+        raw_items = await get_trending()
+        items_all, dismissed_count = _apply_dismissed(raw_items, "trending", dismissed)
+    else:
+        report = load_json_report(section)
+        if report:
+            generated_at = report.get("generated_at")
+            raw_items = report.get("items", [])
+            items_all, dismissed_count = _apply_dismissed(raw_items, section, dismissed)
 
     total = len(items_all) if items_all is not None else 0
     pages = max(1, -(-total // ITEMS_PER_PAGE))
@@ -325,7 +344,6 @@ async def section_fragment(
             "total": total,
             "dismissed_count": dismissed_count,
             "generated_at": generated_at,
-            "other_page": other_page,
             "enabled_services": ENABLED_SERVICES,
             "slskd_enabled": SLSKD_ENABLED,
         },
@@ -423,26 +441,15 @@ async def log_stream(job_id: str, _: str = Depends(require_auth)):
     )
 
 
+# ── Trending refresh ──────────────────────────────────────────────────────────
+
+@app.post("/api/trending/refresh")
+async def trending_refresh(_: str = Depends(require_auth)):
+    await get_trending(force=True)
+    return {"status": "ok"}
+
+
 # ── Streaming search helpers ──────────────────────────────────────────────────
-
-async def _get_spotify_token() -> str | None:
-    if not (_SPOTIFY_CLIENT_ID and _SPOTIFY_CLIENT_SECRET):
-        return None
-    now = time.monotonic()
-    if _spotify_token.get("token") and now < _spotify_token.get("expires_at", 0):
-        return _spotify_token["token"]
-    async with httpx.AsyncClient() as c:
-        r = await c.post("https://accounts.spotify.com/api/token",
-                         data={"grant_type": "client_credentials"},
-                         auth=(_SPOTIFY_CLIENT_ID, _SPOTIFY_CLIENT_SECRET),
-                         timeout=5)
-    if r.status_code != 200:
-        return None
-    d = r.json()
-    _spotify_token.update(token=d["access_token"],
-                          expires_at=now + d.get("expires_in", 3600) - 60)
-    return _spotify_token["token"]
-
 
 async def _search_apple(artist: str, album: str) -> str | None:
     async with httpx.AsyncClient() as c:
@@ -570,8 +577,8 @@ class DismissRequest(BaseModel):
 
 @app.post("/dismiss")
 async def dismiss_item(body: DismissRequest, _: str = Depends(require_auth)):
-    if body.type not in ("missing", "discover"):
-        raise HTTPException(status_code=400, detail="type must be 'missing' or 'discover'")
+    if body.type not in ("missing", "discover", "trending"):
+        raise HTTPException(status_code=400, detail="type must be 'missing', 'discover', or 'trending'")
     data = load_dismissed()
     if body.key not in data[body.type]:
         data[body.type].append(body.key)
@@ -581,8 +588,8 @@ async def dismiss_item(body: DismissRequest, _: str = Depends(require_auth)):
 
 @app.delete("/dismiss")
 async def undismiss_item(body: DismissRequest, _: str = Depends(require_auth)):
-    if body.type not in ("missing", "discover"):
-        raise HTTPException(status_code=400, detail="type must be 'missing' or 'discover'")
+    if body.type not in ("missing", "discover", "trending"):
+        raise HTTPException(status_code=400, detail="type must be 'missing', 'discover', or 'trending'")
     data = load_dismissed()
     try:
         data[body.type].remove(body.key)
