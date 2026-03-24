@@ -145,6 +145,39 @@
     }
     .btn-submit-request:hover { background: #222; color: #ccc; border-color: #333; text-decoration: none; }
 
+    /* Debug log panel */
+    .debug-log-panel {
+      background: #080808;
+      border: 1px solid #1e1e1e;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      overflow: hidden;
+    }
+    .debug-log-toolbar {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      padding: .6rem 1rem;
+      border-bottom: 1px solid #1a1a1a;
+      background: #0d0d0d;
+    }
+    .debug-log-label { font-size: .78rem; color: #555; flex: 1; }
+    .debug-log-output {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: .75rem;
+      line-height: 1.55;
+      padding: .75rem 1rem;
+      max-height: 520px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-line         { color: #555; display: block; }
+    .log-line-INFO    { color: #888; }
+    .log-line-WARNING { color: #f59e0b; }
+    .log-line-ERROR   { color: #f87171; }
+    .log-line-DEBUG   { color: #333; }
+
     /* Modal */
     .modal-backdrop {
       display: none;
@@ -413,7 +446,20 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
         Submit Request
       </button>
+      <button class="btn-submit-request" onclick="toggleDebugLog()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        Debug Log
+      </button>
     </div>
+  </div>
+
+  <div id="debug-log-panel" style="display:none" class="debug-log-panel">
+    <div class="debug-log-toolbar">
+      <span class="debug-log-label">Application Log — last 1000 lines</span>
+      <button class="btn-clear" onclick="refreshDebugLog()">Refresh</button>
+      <button class="btn-clear" onclick="closeDebugLog()">&#x2715;</button>
+    </div>
+    <div id="debug-log-output" class="debug-log-output"></div>
   </div>
 
   <div class="help-section">
@@ -837,5 +883,54 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeRequestModal();
   });
+
+  // ── Debug log viewer ──────────────────────────────────────────────────────
+  let _debugLogOpen = false;
+
+  async function toggleDebugLog() {
+    const panel = document.getElementById('debug-log-panel');
+    if (_debugLogOpen) {
+      panel.style.display = 'none';
+      _debugLogOpen = false;
+    } else {
+      panel.style.display = 'block';
+      _debugLogOpen = true;
+      await refreshDebugLog();
+    }
+  }
+
+  function closeDebugLog() {
+    document.getElementById('debug-log-panel').style.display = 'none';
+    _debugLogOpen = false;
+  }
+
+  async function refreshDebugLog() {
+    const out = document.getElementById('debug-log-output');
+    out.textContent = 'Loading\u2026';
+    try {
+      const r = await fetch('/api/debug-log');
+      if (!r.ok) { out.textContent = `Error: HTTP ${r.status}`; return; }
+      const { lines } = await r.json();
+      out.innerHTML = '';
+      if (!lines.length) {
+        const empty = document.createElement('span');
+        empty.className = 'log-line';
+        empty.textContent = '(no log entries yet)';
+        out.appendChild(empty);
+        return;
+      }
+      for (const line of lines) {
+        const div = document.createElement('div');
+        const m = line.match(/\[(ERROR|WARNING|WARN|INFO|DEBUG)\]/);
+        const level = m ? m[1].replace('WARN', 'WARNING') : '';
+        div.className = `log-line${level ? ' log-line-' + level : ''}`;
+        div.textContent = line;
+        out.appendChild(div);
+      }
+      out.scrollTop = out.scrollHeight;
+    } catch (e) {
+      out.textContent = `Failed to load logs: ${e}`;
+    }
+  }
 </script>
 {% endblock %}

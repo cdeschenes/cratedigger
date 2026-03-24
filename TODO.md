@@ -6,7 +6,7 @@
 
 - [x] **Mobile support** — Make the site usable on mobile devices (responsive layout, touch-friendly cards, readable font sizes on small screens).
 
-- [ ] **Debug log viewer** — Add a "Debug Log" button to the top of the Help & Documentation page that tails the last 1000 lines of the app log. Syntax highlighting to make errors stand out (red for ERROR, yellow for WARNING, dimmed for DEBUG).
+- [x] **Debug log viewer** — Add a "Debug Log" button to the top of the Help & Documentation page that tails the last 1000 lines of the app log. Syntax highlighting to make errors stand out (red for ERROR, yellow for WARNING, dimmed for DEBUG).
 
 - [x] **Submit Request button** — Add a "Submit Request" button to the top of the Help & Documentation page. Opens a form (bug report or feature request) that auto-populates the GitHub Issues "new issue" URL for this repo so the user can submit without leaving the app.
 

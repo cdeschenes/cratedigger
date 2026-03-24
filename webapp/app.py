@@ -25,6 +25,7 @@ import logging
 import os
 import secrets as _secrets_mod
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +33,23 @@ from pathlib import Path
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# ── In-memory app log buffer ──────────────────────────────────────────────────
+
+_app_log_buffer: deque[str] = deque(maxlen=500)
+
+
+class _DequeHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            _app_log_buffer.append(self.format(record))
+        except Exception:
+            pass
+
+
+_dh = _DequeHandler()
+_dh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+logging.getLogger().addHandler(_dh)
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
@@ -52,6 +70,9 @@ ITEMS_PER_PAGE = 4
 SECTION_FULL_PER_PAGE = 100
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
+
+_MISSING_LOG  = Path(os.environ.get("LOG_FILE",          "/data/missing_popular_albums.log"))
+_DISCOVER_LOG = Path(os.environ.get("DISCOVER_LOG_FILE", "/data/discover_similar_artists.log"))
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -660,3 +681,17 @@ async def undismiss_item(body: DismissRequest, _: str = Depends(require_auth)):
 @app.get("/dismissed")
 async def get_dismissed(_: str = Depends(require_auth)):
     return load_dismissed()
+
+
+@app.get("/api/debug-log")
+async def debug_log(_: str = Depends(require_auth)):
+    lines: list[str] = []
+    for log_path in (_MISSING_LOG, _DISCOVER_LOG):
+        if log_path.exists():
+            try:
+                text = log_path.read_text(encoding="utf-8", errors="replace")
+                lines.extend(text.splitlines()[-500:])
+            except Exception:
+                logger.exception("Could not read log file: %s", log_path)
+    lines.extend(_app_log_buffer)
+    return {"lines": lines[-1000:]}
