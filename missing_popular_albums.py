@@ -393,6 +393,20 @@ def normalize_album_title(value: str) -> str:
     return normalize_spaces(value)
 
 
+def strip_name_variant(name: str) -> str:
+    """Remove bullet-separated name variants, keeping only the primary name.
+
+    Some music taggers and media servers (e.g. Navidrome) store both a display
+    name and a sort/alternate name in the ALBUMARTIST tag, separated by U+2022
+    (e.g. 'Dead Prez • dead prez'). Last.fm rejects the full string as unknown;
+    we take only the first component.
+    """
+    if "\u2022" in name:
+        parts = [p.strip() for p in name.split("\u2022") if p.strip()]
+        return parts[0] if parts else name
+    return name
+
+
 def primary_artist_name(name: str) -> str:
     if not name:
         return ""
@@ -450,6 +464,7 @@ def parse_album_from_path(album_dir: Path) -> tuple[str | None, str | None]:
 def add_local_album(
     artists: dict[str, LocalArtist], artist_name: str, album_name: str, source: str
 ) -> None:
+    artist_name = strip_name_variant(artist_name)
     normalized_artist = normalize_text(artist_name)
     if not normalized_artist or is_artist_excluded(normalized_artist):
         return
