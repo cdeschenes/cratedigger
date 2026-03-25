@@ -88,6 +88,8 @@
     .btn-run:hover:not(:disabled) { background: #2563eb; }
     .btn-view { background: #1a1a1a; color: #777; border: 1px solid #252525; }
     .btn-view:hover:not(.btn-disabled) { background: #222; color: #aaa; }
+    .btn-cache-clear { background: #1a1a1a; color: #f87171; border: 1px solid #3a1515; }
+    .btn-cache-clear:hover:not(:disabled) { background: #200808; border-color: #4a1515; }
 
     .log-panel { display: none; flex-direction: column; gap: .5rem; }
     .log-panel.visible { display: flex; }
@@ -153,10 +155,16 @@
     <p>Trigger script runs manually and watch live output.</p>
   </div>
 
-  <div style="margin-bottom:1.25rem">
+  <div style="margin-bottom:1.25rem;display:flex;gap:.75rem;align-items:center">
     <button class="btn-run" id="run-all-btn" onclick="runAll()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
       Run All
+    </button>
+    <button class="btn-cache-clear" id="clear-cache-btn" onclick="clearCache()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+      </svg>
+      Clear Cache
     </button>
   </div>
 
@@ -295,6 +303,24 @@
   function runAll() {
     document.getElementById("run-all-btn").disabled = true;
     ALL_JOBS.forEach(triggerRun);
+  }
+
+  async function clearCache() {
+    if (!confirm('Delete all cached reports and Last.fm data?\n\nThe viewer will show empty sections until the scripts are run again.')) return;
+    const btn = document.getElementById('clear-cache-btn');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/clear-cache', { method: 'POST' });
+      const data = await r.json();
+      if (!r.ok) { showToast('Clear failed: ' + (data.detail || r.status)); return; }
+      const msg = data.deleted.length ? `Cleared ${data.deleted.length} file(s)` : 'Nothing to clear';
+      const errSuffix = data.errors.length ? ` (${data.errors.length} error(s) — check logs)` : '';
+      showToast(msg + errSuffix);
+    } catch (e) {
+      showToast('Clear failed: ' + e);
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   function openStream(jobId) {

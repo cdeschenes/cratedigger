@@ -59,7 +59,7 @@ from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
 from webapp.auth import NotAuthenticatedException, check_credentials, require_auth
-from webapp.runner import get_all_status, get_status, run_job, stream_logs
+from webapp.runner import SCRIPTS_DIR, get_all_status, get_status, run_job, stream_logs
 from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
 from webapp.trending import TRENDING_FEEDS, get_trending
@@ -695,3 +695,20 @@ async def debug_log(_: str = Depends(require_auth)):
                 logger.exception("Could not read log file: %s", log_path)
     lines.extend(_app_log_buffer)
     return {"lines": lines[-1000:]}
+
+
+@app.post("/api/clear-cache")
+async def clear_cache(_: str = Depends(require_auth)):
+    targets = [DATA_DIR / name for name in JSON_FILES.values()] + [
+        SCRIPTS_DIR / ".cache" / "lastfm_top_albums.json",
+        SCRIPTS_DIR / ".cache" / "similar_artists.json",
+    ]
+    deleted, errors = [], []
+    for path in targets:
+        try:
+            path.unlink(missing_ok=True)
+            deleted.append(path.name)
+        except OSError as exc:
+            logger.warning("Could not delete %s: %s", path, exc)
+            errors.append(path.name)
+    return {"deleted": deleted, "errors": errors}
