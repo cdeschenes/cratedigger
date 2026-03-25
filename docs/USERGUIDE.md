@@ -44,7 +44,7 @@ Requests are rate-limited by a random delay between `REQUEST_DELAY_MIN` and `REQ
 
 **Similar artist discovery.** For each local artist, the script calls `artist.getSimilar` and takes up to `SIMILAR_ARTIST_LIMIT` results. Each result is fuzzy-matched against every local artist name. Any candidate not already in the collection is kept, up to `SUGGESTIONS_PER_ARTIST` per local artist. Results are globally deduplicated — if two local artists both suggest "Armand Hammer", there is one card, and the "Similar to" line shows both sources.
 
-**Genre tag filter / re-score.** Tags are always fetched when `DISCOVER_TAG_OVERLAP > 0` or `DISCOVER_SIMILARITY_MODE=tags`. In `lastfm` mode, candidates are filtered by minimum shared-tag count (`DISCOVER_TAG_OVERLAP`). In `tags` mode, candidates are re-scored by Jaccard genre-tag similarity and any candidate with zero tag overlap is excluded — fixing cross-genre mismatch cases. Tags like "seen live", "favourite", and "awesome" are on a blocklist and don't count toward any score.
+**Genre tag filter / re-score.** Tags are always fetched when `DISCOVER_TAG_OVERLAP > 0` or `DISCOVER_SIMILARITY_MODE=tags`. In `lastfm` mode, candidates are filtered by minimum shared-tag count (`DISCOVER_TAG_OVERLAP`). In `tags` mode, candidates are re-scored by Jaccard genre-tag similarity; only the top `DISCOVER_TAG_TOP_N` tags per artist (by Last.fm weight) are used for scoring, and any candidate scoring below `DISCOVER_MIN_JACCARD` is dropped. Tags on a blocklist (platform tags like "spotify" and "heard on pandora", user-behavior tags like "seen live" and "favourite", and noise words like "music" and "cool") don't count toward any score.
 
 **Top album enrichment.** Each surviving candidate gets its most popular qualifying album fetched from Last.fm. Candidates with no qualifying album are dropped. The remaining suggestions are sorted by similarity score descending.
 
@@ -222,13 +222,29 @@ Use `tags` mode if you're seeing cross-genre mismatches — for example, an ambi
 
 ### DISCOVER_TAG_OVERLAP
 
-The minimum number of matching genre tags required to keep a similar-artist candidate (in `lastfm` mode). The tag comparison ignores tags on a blocklist (seen live, favourite, awesome, etc.) that carry no real genre signal.
+The minimum number of matching genre tags required to keep a similar-artist candidate (in `lastfm` mode). The tag comparison ignores tags on a blocklist (platform tags, user-behavior tags like "seen live", and noise words like "music") that carry no real genre signal.
 
 Set to `0` to disable genre filtering entirely — every candidate from `artist.getSimilar` passes through as long as they're not already in your collection.
 
 Set to `2` or higher for stricter genre matching. Useful if you're getting suggestions that are similar to one of your artists in Last.fm's model but don't match the kind of music you actually want.
 
-In `tags` mode this setting is ignored — the Jaccard score threshold (>0.0) is always enforced.
+In `tags` mode this setting is ignored — `DISCOVER_MIN_JACCARD` controls the threshold instead.
+
+### DISCOVER_TAG_TOP_N
+
+(`tags` mode only.) Default: `5`, range 1–10.
+
+Controls how many tags per artist are used when computing Jaccard similarity. Last.fm returns tags in descending weight order, so the top 5 represent an artist's strongest genre signals. Tags further down the list tend to be broad terms ("rock", "indie") that appear on so many artists that they inflate similarity scores between unrelated artists.
+
+Lower this if suggestions still feel genre-mismatched — using only the top 2 or 3 tags produces a tighter genre match. Raise it if results feel too narrow and you want more breadth.
+
+### DISCOVER_MIN_JACCARD
+
+(`tags` mode only.) Default: `0.1`.
+
+Minimum Jaccard score (0.0–1.0) a candidate must reach to appear in results. A score of 0.1 means at least 10% of the combined tag set must overlap. The old threshold was any score above 0.0, which let through candidates sharing a single low-signal tag.
+
+Raise this to tighten results — 0.2 or 0.3 tends to keep only clear genre matches. Lower it toward 0.05 if your library is eclectic and you're seeing too few suggestions.
 
 ### SUGGESTIONS_PER_ARTIST
 
@@ -275,6 +291,8 @@ Hovering over album art reveals circular service icons centered on the image. Cl
 
 Only one player is open at a time — opening a second automatically closes the first.
 
+If a Last.fm cover image fails to load (404 or network error), the card automatically retries using the iTunes Search API as a fallback — no credentials required. If that also fails, the card shows a "No Artwork" placeholder.
+
 Service setup:
 
 | Service | Credentials needed | Notes |
@@ -300,6 +318,18 @@ Each card has a Copy button that copies the artist name and album title to the c
 ### Dismiss
 
 The ✕ button on each card permanently hides it from the viewer. Dismissed items are stored in `/data/dismissed.json` (inside the Docker volume, so they survive container restarts and rebuilds). They are also excluded when the scripts run — so a re-run won't re-surface albums you've already dismissed.
+
+### Help page
+
+The Help page (`/help`) has two features worth knowing about:
+
+**Debug Log** — opens a collapsible panel showing the last 1000 lines from the application logs, sourced from `/data/missing_popular_albums.log`, `/data/discover_similar_artists.log`, and an in-memory ring buffer. ERROR lines are highlighted red, WARNING yellow, DEBUG dim. A Refresh button re-fetches without closing the panel. Useful when a job reports failure and you want to see why without shelling into the container.
+
+**Submit Request** — opens a modal with a pre-filled GitHub Issues URL. Clicking through takes you to a new issue form with the label, title, and body already populated. Handy for filing a bug report without having to find the repo URL.
+
+### Version badge
+
+The navbar version number (top right) changes color based on the running version vs. the latest GitHub release: green means you're current, red means you're behind and links to the releases page. The check runs once at page load and caches the result in `localStorage` for one hour. If you're offline or GitHub is unreachable, the badge stays its default color.
 
 ### Triggering via API
 
@@ -350,7 +380,7 @@ Results from all active sources are merged by interleaving (for variety) and ded
 
 ## Full-page section view
 
-Clicking a section title ("Discover Similar Artists", "Missing Popular Albums", or "New & Trending") in the Report Viewer opens a full-page view at `/section/{section}`. All items are shown in a single scrollable list — no pagination. A back link at the top returns to the main viewer.
+Clicking a section title ("Discover Similar Artists", "Missing Popular Albums", or "New & Trending") in the Report Viewer opens a full-page view at `/section/{section}`. Items are shown 100 per page with URL-based Prev/Next navigation (`?page=N`). This replaces the previous behavior of loading all items at once, which was impractically slow with large result sets. A back link at the top returns to the main viewer.
 
 Dismiss buttons work the same way on the full-page view.
 
@@ -410,7 +440,8 @@ Cards are sorted by Last.fm similarity score descending — strongest matches fi
 - Artist name links to their Last.fm page.
 - Top album title and playcount below the name.
 - "Similar to" line showing which local artists triggered the suggestion. If more than four are listed, the rest are collapsed to "+N more".
-- A percentage badge in the top-right corner showing Last.fm's similarity score.
+- Matched tag chips (in `tags` mode) — up to 5 small genre tags shown below the "Similar to" line, indicating which tags the candidate shared with the source artists. These exist to make the match legible: if you see "post-rock / ambient / drone" you know why the suggestion appeared.
+- A percentage badge in the top-right corner showing the similarity score.
 - Same search links as above.
 
 ---
@@ -576,6 +607,7 @@ Check `docker logs cratedigger`. Common causes:
 ### discover_similar_artists.py returns far fewer results than expected
 
 - `DISCOVER_TAG_OVERLAP` may be filtering aggressively. Try setting it to `0` temporarily to see the unfiltered candidate count in the log.
+- In `tags` mode, `DISCOVER_MIN_JACCARD` (default 0.1) and `DISCOVER_TAG_TOP_N` (default 5) both affect how many candidates survive. Try lowering `DISCOVER_MIN_JACCARD` to `0.05` or raising `DISCOVER_TAG_TOP_N` to `8` or `10` to widen the match set.
 - `SUGGESTIONS_PER_ARTIST` limits how many candidates each local artist contributes. Increasing it raises the global pool size.
 - Artists with no Last.fm similar-artist data are skipped silently.
 

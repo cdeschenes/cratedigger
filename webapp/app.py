@@ -64,7 +64,7 @@ from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
 from webapp.trending import TRENDING_FEEDS, get_trending
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 ITEMS_PER_PAGE = 4
 SECTION_FULL_PER_PAGE = 100

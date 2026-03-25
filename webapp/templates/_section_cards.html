@@ -88,6 +88,13 @@
         {{ item.source_artists[:3] | join(", ") }}{% if item.source_artists | length > 3 %} +{{ item.source_artists | length - 3 }} more{% endif %}
       </div>
       {% endif %}
+      {% if item.matched_tags %}
+      <div class="card-tags">
+        {% for tag in item.matched_tags[:5] %}
+        <span class="tag-chip">{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
     <div class="card-actions">
       <div class="card-links">

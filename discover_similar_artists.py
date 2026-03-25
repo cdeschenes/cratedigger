@@ -70,6 +70,8 @@ DISCOVER_LOG_FILE = Path(
 SUGGESTIONS_PER_ARTIST = int(CONFIG.get("SUGGESTIONS_PER_ARTIST", "2"))
 SIMILAR_ARTIST_LIMIT = int(CONFIG.get("SIMILAR_ARTIST_LIMIT", "30"))
 DISCOVER_TAG_OVERLAP = int(CONFIG.get("DISCOVER_TAG_OVERLAP", "1"))
+DISCOVER_MIN_JACCARD = float(CONFIG.get("DISCOVER_MIN_JACCARD", "0.1"))
+DISCOVER_TAG_TOP_N   = max(1, min(10, int(CONFIG.get("DISCOVER_TAG_TOP_N", "5"))))
 _raw_mode = CONFIG.get("DISCOVER_SIMILARITY_MODE", "lastfm").strip().lower()
 if _raw_mode not in ("lastfm", "tags"):
     import warnings
@@ -83,9 +85,15 @@ DISCOVER_CACHE_VERSION = 2
 
 # Tags that carry no genre signal — excluded from overlap checks
 IGNORED_TAGS: frozenset[str] = frozenset({
+    # user behavior / opinion
     "seen live", "favourite", "favorites", "my favorites", "my favourite",
     "love", "awesome", "best", "great", "amazing", "to listen",
     "all", "albums i own", "check out", "fix tags",
+    # platform / spam
+    "spotify", "heard on pandora", "pandora", "youtube",
+    "under 2000 listeners", "not on spotify",
+    # noise
+    "music", "good", "cool", "beautiful", "nice",
 })
 
 
@@ -102,6 +110,7 @@ class SimilarSuggestion:
     candidate_normalized: str
     source_artists: list[str] = field(default_factory=list)
     similarity_score: float = 0.0
+    matched_tags: list[str] = field(default_factory=list)
     top_album_title: str | None = None
     top_album_playcount: int = 0
     top_album_image_url: str | None = None
@@ -898,35 +907,43 @@ async def main() -> None:
                     for s in sources
                 )
 
-            def jaccard_tag_score(candidate_display: str, sources: list[str]) -> float:
-                """Mean Jaccard tag similarity between candidate and each source artist (0.0–1.0)."""
+            def jaccard_tag_details(
+                candidate_display: str, sources: list[str]
+            ) -> tuple[float, list[str]]:
+                """Return (mean Jaccard score, sorted matched tags) using top-N highest-weight tags."""
                 cand_tags = {
-                    t for t in tag_cache.get(normalize_text(candidate_display), [])
+                    t for t in tag_cache.get(normalize_text(candidate_display), [])[:DISCOVER_TAG_TOP_N]
                     if t not in IGNORED_TAGS
                 }
-                scores = []
+                scores: list[float] = []
+                matched: set[str] = set()
                 for source in sources:
                     src_tags = {
-                        t for t in tag_cache.get(normalize_text(source), [])
+                        t for t in tag_cache.get(normalize_text(source), [])[:DISCOVER_TAG_TOP_N]
                         if t not in IGNORED_TAGS
                     }
                     union = cand_tags | src_tags
                     if union:
-                        scores.append(len(cand_tags & src_tags) / len(union))
-                return sum(scores) / len(scores) if scores else 0.0
+                        intersection = cand_tags & src_tags
+                        scores.append(len(intersection) / len(union))
+                        matched |= intersection
+                score = sum(scores) / len(scores) if scores else 0.0
+                return score, sorted(matched)
 
             before = len(candidates)
             if DISCOVER_SIMILARITY_MODE == "tags":
-                # Hard-exclude zero-overlap matches; re-score by Jaccard similarity
-                candidates = {
-                    k: v for k, v in candidates.items()
-                    if jaccard_tag_score(v.candidate_display, v.source_artists) > 0.0
-                }
-                for sug in candidates.values():
-                    sug.similarity_score = jaccard_tag_score(sug.candidate_display, sug.source_artists)
+                survivors: dict = {}
+                for k, v in candidates.items():
+                    score, matched = jaccard_tag_details(v.candidate_display, v.source_artists)
+                    if score >= DISCOVER_MIN_JACCARD:
+                        v.similarity_score = score
+                        v.matched_tags = matched
+                        survivors[k] = v
+                candidates = survivors
                 logging.info(
-                    "Phase A.5 complete — %d/%d candidates kept after genre re-scoring (tags mode).",
-                    len(candidates), before,
+                    "Phase A.5 complete — %d/%d candidates kept after genre re-scoring "
+                    "(tags mode, top_n=%d, min_jaccard=%.2f).",
+                    len(candidates), before, DISCOVER_TAG_TOP_N, DISCOVER_MIN_JACCARD,
                 )
             else:
                 candidates = {
@@ -993,6 +1010,7 @@ async def main() -> None:
                         "candidate_normalized": s.candidate_normalized,
                         "source_artists": s.source_artists,
                         "similarity_score": round(s.similarity_score, 4),
+                        "matched_tags": s.matched_tags,
                         "top_album_title": s.top_album_title,
                         "top_album_playcount": s.top_album_playcount,
                         "top_album_image_url": s.top_album_image_url,

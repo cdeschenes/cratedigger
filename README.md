@@ -127,6 +127,8 @@ All three of `NAVIDROME_URL`, `NAVIDROME_USER`, and `NAVIDROME_PASS` must be set
 | `SIMILAR_ARTIST_LIMIT` | `30` | How many similar artists Last.fm returns per query before filtering. |
 | `DISCOVER_TAG_OVERLAP` | `1` | Minimum number of shared Last.fm genre tags between a candidate and at least one source artist. Set to `0` to disable genre filtering entirely. |
 | `DISCOVER_SIMILARITY_MODE` | `lastfm` | `lastfm`: sort by Last.fm shared-listener score (default). `tags`: re-score candidates by genre-tag Jaccard similarity and drop zero-overlap matches. |
+| `DISCOVER_TAG_TOP_N` | `5` | (`tags` mode only) Number of highest-weight Last.fm tags per artist used for Jaccard scoring. Range 1–10. Cutting to the top 5 avoids broad low-weight tags like "rock" or "indie" creating spurious matches. |
+| `DISCOVER_MIN_JACCARD` | `0.1` | (`tags` mode only) Minimum Jaccard score a candidate must reach to survive. Lower values surface more distant matches; raise it to tighten results. |
 
 ### Web app / Docker only
 
@@ -174,11 +176,12 @@ A **Run All** button at the top triggers all three jobs at once. It is disabled 
 
 When a job starts, the panel opens a live log area and streams script output line by line via SSE. Reloading mid-run replays the buffered log (up to 2000 lines) before the live stream resumes.
 
-The **Report Viewer** (`/`) has three sections: Discover Similar Artists, Missing Popular Albums, and New & Trending. Sections use AJAX pagination — Prev/Next updates the cards in-place and browser back/forward works. Clicking a section title opens a full-page view at `/section/{section}` with all items in a scrollable list and no pagination. A back link returns to the main viewer.
+The **Report Viewer** (`/`) has three sections: Discover Similar Artists, Missing Popular Albums, and New & Trending. Sections use AJAX pagination — Prev/Next updates the cards in-place and browser back/forward works. Clicking a section title opens a full-page view at `/section/{section}` with 100 items per page and URL-based Prev/Next navigation. A back link returns to the main viewer.
 
 Each card includes:
 
 - Streaming preview — hover the album art to reveal service icons (Apple Music, Spotify, YouTube). Click one to open an embedded player directly inside the card. Apple Music requires no credentials; Spotify and YouTube require `SPOTIFY_*` / `YOUTUBE_API_KEY` in your `.env`.
+- Cover art fallback — if a Last.fm image fails to load, the card silently retries via the iTunes Search API (no credentials needed). If that also fails, a "No Artwork" placeholder appears.
 - Copy — copies the artist + album title to clipboard.
 - Dismiss — hides the card permanently. Dismissed items are stored in `/data/dismissed.json` and excluded from future script runs.
 
@@ -191,14 +194,15 @@ Each card includes:
 | GET | `/healthz` | None | Docker health check |
 | GET | `/` | Session | Combined report viewer |
 | GET | `/dashboard` | Session | Script run dashboard |
-| GET | `/help` | Session | Help and card reference |
-| GET | `/section/{missing\|discover\|trending}` | Session | Full-page view of one section (all items, no pagination) |
+| GET | `/help` | Session | Help and card reference, debug log viewer, and submit request modal |
+| GET | `/section/{missing\|discover\|trending}` | Session | Full-page paginated view of one section (100 items per page) |
 | GET | `/report/{missing\|discover}` | Session | Serve the raw HTML report file |
 | POST | `/run/{missing\|discover\|trending}` | Session | Trigger a script run. Returns 409 if already running. |
 | GET | `/status/{missing\|discover\|trending}` | Session | JSON job status snapshot |
 | GET | `/logs/{missing\|discover\|trending}` | Session | SSE live log stream |
 | GET | `/api/section/{section}` | Session | AJAX partial — card grid + pager for one section |
 | POST | `/api/trending/refresh` | Session | Force-refresh the trending cache |
+| GET | `/api/debug-log` | Session | Last 1000 lines of application logs (used by Help page debug viewer) |
 | GET | `/api/stream-info` | Session | Look up streaming embed URL for an album |
 | POST | `/api/slskd-search` | Session | Queue album search on a running SLSKD instance |
 | POST | `/dismiss` | Session | Add item to dismissed list |

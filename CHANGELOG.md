@@ -6,6 +6,52 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-03-24
+
+### Added
+
+- Full-page section pagination — `/section/{section}` now shows 100 items per page with
+  URL-based Prev/Next navigation (`?page=N`). Previously the page loaded all items at once,
+  which was slow at 1000+ cards. Page size controlled by `SECTION_FULL_PER_PAGE = 100` in
+  `webapp/app.py`.
+- Submit Request button on the Help page — opens a modal that pre-populates a GitHub Issues
+  URL with the appropriate label, title, and body so bug reports and feature requests can be
+  filed without leaving the app.
+- Version badge update check — the navbar version number turns green when running the latest
+  GitHub release and red (with a link) when behind. Checks
+  `https://api.github.com/repos/cdeschenes/cratedigger/releases/latest` at page load; result
+  is cached in `localStorage` under `cd_latest_ver` for one hour.
+- Cover art fallback — when a Last.fm image URL fails to load, the card's `<img>` fires an
+  `onerror` handler (`imgFallback()`) that tries the iTunes Search API as a no-credentials
+  fallback. If that also fails, a "No Artwork" placeholder replaces the image. Implemented
+  client-side in `base.html`.
+- Debug Log viewer on the Help page — a "Debug Log" button opens a collapsible panel showing
+  the last 1000 lines of application logs. ERROR lines are highlighted red, WARNING yellow,
+  DEBUG dim. Sources: `/data/missing_popular_albums.log`,
+  `/data/discover_similar_artists.log`, and an in-memory ring buffer (500 lines) attached to
+  the root logger via `_DequeHandler`. Fetched from `GET /api/debug-log` (auth required). A
+  Refresh button re-fetches without closing the panel.
+- `DISCOVER_TAG_TOP_N` env var (default: `5`, range 1–10) — limits tag-mode Jaccard scoring
+  to only the top N highest-weight Last.fm tags per artist. Tags are returned by Last.fm in
+  descending weight order, so this cuts low-weight broad tags (e.g. "rock", "indie") that
+  create false matches from contaminating the score.
+- `DISCOVER_MIN_JACCARD` env var (default: `0.1`) — minimum Jaccard score for a candidate to
+  survive in `tags` mode. Replaces the previous `> 0.0` threshold that passed any candidate
+  sharing a single tag.
+- Expanded tag blocklist (`IGNORED_TAGS`) — added platform/spam tags (`spotify`,
+  `heard on pandora`, `pandora`, `youtube`, `under 2000 listeners`, `not on spotify`) and
+  noise words (`music`, `good`, `cool`, `beautiful`, `nice`) to the existing blocklist.
+- Matched tags on Discover cards — in `tags` mode, cards show up to 5 tag chips below the
+  "Similar to:" line, indicating which genre tags the candidate shared with the source
+  artists. Tags are stored in a new `matched_tags` field on `SimilarSuggestion` and included
+  in `discover_similar_artists.json`.
+
+### Fixed
+
+- `save_dismissed()` in `webapp/app.py` now wraps file writes in try/except with
+  `logger.exception()`, so write failures are logged rather than silently crashing the
+  request.
+
 ## [1.2.0] - 2026-03-24
 
 ### Added
