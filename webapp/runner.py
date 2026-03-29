@@ -129,11 +129,17 @@ async def _run_and_capture(job_id: str, cmd: list[str]) -> None:
 async def _run_and_capture_trending() -> None:
     state = _jobs["trending"]
     try:
-        from webapp.trending import TRENDING_FEEDS, get_trending  # local import avoids circular dep
-        feeds_str = ", ".join(TRENDING_FEEDS) if TRENDING_FEEDS else "none configured"
-        _log("trending", f"Fetching trending releases from: {feeds_str}")
-        items = await get_trending(force=True)
-        _log("trending", f"Done — {len(items)} releases fetched and cached.")
+        from webapp.discovery import DISCOVERY_FEEDS, get_discovery_results  # local import avoids circular dep
+        feeds_str = ", ".join(DISCOVERY_FEEDS) if DISCOVERY_FEEDS else "none configured"
+        _log("trending", f"Running discovery pipeline — sources: {feeds_str}")
+        result = await get_discovery_results(force=True)
+        total = result.get("total_items", 0)
+        sections = (
+            f"new_from_artists={len(result.get('new_from_artists', []))}, "
+            f"trending_near_taste={len(result.get('trending_near_taste', []))}, "
+            f"genre_picks={len(result.get('genre_picks', []))}"
+        )
+        _log("trending", f"Done — {total} releases scored and cached. ({sections})")
         state.exit_code = 0
         state.status = "succeeded"
     except Exception as exc:

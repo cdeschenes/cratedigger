@@ -59,28 +59,39 @@
     {% endif %}
   </div>
 
-  {% if trending_feeds_enabled %}
+  {% if discovery_enabled %}
   <hr class="section-divider">
 
-  {# ── New & Trending ── #}
+  {# ── New & Trending (discovery engine) ── #}
   <div id="section-trending" class="section">
     <div class="section-header">
       <a id="section-trending-heading" class="section-title" href="/section/trending">New &amp; Trending</a>
     </div>
 
     <div id="section-trending-content">
-      {% if trending_items is none %}
+      {% if discovery_total == 0 %}
       <div class="empty-state">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" stroke-width="1.5" style="margin:0 auto .75rem;display:block">
           <circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>
         </svg>
         <strong style="color:#555">No releases yet</strong>
-        <p>Click <strong>Refresh</strong> to fetch the latest releases.</p>
+        <p>Click <strong>Refresh</strong> on the dashboard to run the discovery pipeline.</p>
       </div>
       {% else %}
-      {% with section="trending", items=trending_items, page=t_page, pages=t_pages, total=t_total, dismissed_count=t_dismissed_count, generated_at=t_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled %}
-      {% include "_section_cards.html" %}
-      {% endwith %}
+      {% for subsection_key, subsection_title in [
+          ("new_from_artists",    "New From Your Artists"),
+          ("trending_near_taste", "Trending Near Your Taste"),
+          ("genre_picks",         "Genre Picks"),
+      ] %}
+      {% if discovery_sections[subsection_key] %}
+      <div class="discovery-subsection">
+        <h3 class="discovery-subsection-title">{{ subsection_title }}</h3>
+        {% with section="trending", items=discovery_sections[subsection_key], page=1, pages=1, total=discovery_sections[subsection_key]|length, dismissed_count=0, generated_at=discovery_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled %}
+        {% include "_section_cards.html" %}
+        {% endwith %}
+      </div>
+      {% endif %}
+      {% endfor %}
       {% endif %}
     </div>
   </div>
@@ -91,7 +102,6 @@
 <script>
   let dPage = {{ d_page }};
   let mPage = {{ m_page }};
-  let tPage = {{ t_page }};
 
   // ── Streaming player ──────────────────────────────────────────────────────
   let _activePlayerBtn = null;
@@ -152,11 +162,10 @@
     document.getElementById(`section-${section}-content`).innerHTML = await res.text();
     if (section === "discover") dPage = page;
     else if (section === "missing") mPage = page;
-    else tPage = page;
     document.getElementById(`section-${section}-heading`)
             .scrollIntoView({ behavior: "smooth", block: "start" });
-    history.pushState({ d_page: dPage, m_page: mPage, t_page: tPage }, "",
-                      `/?d_page=${dPage}&m_page=${mPage}&t_page=${tPage}`);
+    history.pushState({ d_page: dPage, m_page: mPage }, "",
+                      `/?d_page=${dPage}&m_page=${mPage}`);
   }
 
   async function dismissCard(btn) {
@@ -233,8 +242,6 @@
       loadSection("discover", e.state.d_page);
     if (e.state.m_page !== undefined && e.state.m_page !== mPage)
       loadSection("missing", e.state.m_page);
-    if (e.state.t_page !== undefined && e.state.t_page !== tPage)
-      loadSection("trending", e.state.t_page);
   });
 </script>
 {% endblock %}

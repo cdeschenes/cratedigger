@@ -62,7 +62,7 @@ from webapp.auth import NotAuthenticatedException, check_credentials, require_au
 from webapp.runner import SCRIPTS_DIR, get_all_status, get_status, run_job, stream_logs
 from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
-from webapp.trending import TRENDING_FEEDS, get_trending
+from webapp.discovery import DISCOVERY_FEEDS, get_discovery_results
 
 __version__ = "1.2.1"
 
@@ -82,9 +82,9 @@ REPORT_FILES: dict[str, str] = {
 }
 
 JSON_FILES: dict[str, str] = {
-    "missing": "missing_popular_albums.json",
+    "missing":  "missing_popular_albums.json",
     "discover": "discover_similar_artists.json",
-    "trending": "trending_albums.json",
+    "trending": "discovery_results.json",
 }
 
 JOB_LABELS: dict[str, str] = {
@@ -274,37 +274,46 @@ async def viewer(
     _: str = Depends(require_auth),
     d_page: int = 1,
     m_page: int = 1,
-    t_page: int = 1,
 ):
     discover_report = load_json_report("discover")
     missing_report  = load_json_report("missing")
-    # Trending: use persisted file for fast initial render (AJAX refreshes use live cache)
-    trending_report = load_json_report("trending") if TRENDING_FEEDS else None
+    # Discovery: use persisted file for fast initial render (AJAX refreshes use live cache)
+    discovery_report = load_json_report("trending") if DISCOVERY_FEEDS else None
     dismissed = load_dismissed()
 
     d_items_raw = discover_report["items"] if discover_report else None
     m_items_raw = missing_report["items"]  if missing_report  else None
-    t_items_raw = trending_report["items"] if trending_report else ([] if TRENDING_FEEDS else None)
 
     d_items_all, d_dismissed_count = _apply_dismissed(d_items_raw, "discover", dismissed) if d_items_raw is not None else (None, 0)
     m_items_all, m_dismissed_count = _apply_dismissed(m_items_raw, "missing",  dismissed) if m_items_raw is not None else (None, 0)
-    t_items_all, t_dismissed_count = _apply_dismissed(t_items_raw, "trending", dismissed) if t_items_raw is not None else (None, 0)
 
     d_total = len(d_items_all) if d_items_all is not None else 0
     m_total = len(m_items_all) if m_items_all is not None else 0
-    t_total = len(t_items_all) if t_items_all is not None else 0
 
     d_pages = max(1, -(-d_total // ITEMS_PER_PAGE))
     m_pages = max(1, -(-m_total // ITEMS_PER_PAGE))
-    t_pages = max(1, -(-t_total // ITEMS_PER_PAGE))
 
     d_page = max(1, min(d_page, d_pages))
     m_page = max(1, min(m_page, m_pages))
-    t_page = max(1, min(t_page, t_pages))
 
     d_start = (d_page - 1) * ITEMS_PER_PAGE
     m_start = (m_page - 1) * ITEMS_PER_PAGE
-    t_start = (t_page - 1) * ITEMS_PER_PAGE
+
+    # Build discovery sections from persisted file (or empty if not yet run)
+    _disc_sections = {
+        "new_from_artists":    [],
+        "trending_near_taste": [],
+        "genre_picks":         [],
+    }
+    _disc_generated_at: str | None = None
+    _disc_total = 0
+    if discovery_report:
+        _disc_generated_at = discovery_report.get("generated_at")
+        for key in _disc_sections:
+            raw = discovery_report.get(key, [])
+            filtered, _ = _apply_dismissed(raw, "trending", dismissed)
+            _disc_sections[key] = filtered[:ITEMS_PER_PAGE]
+        _disc_total = sum(len(v) for v in _disc_sections.values())
 
     return templates.TemplateResponse(
         request,
@@ -313,17 +322,17 @@ async def viewer(
             "version": __version__,
             "discover_items": d_items_all[d_start:d_start + ITEMS_PER_PAGE] if d_items_all is not None else None,
             "missing_items":  m_items_all[m_start:m_start + ITEMS_PER_PAGE] if m_items_all is not None else None,
-            "trending_items": t_items_all[t_start:t_start + ITEMS_PER_PAGE] if t_items_all is not None else None,
             "d_page": d_page, "d_pages": d_pages, "d_total": d_total,
             "d_dismissed_count": d_dismissed_count,
             "d_generated_at": discover_report.get("generated_at") if discover_report else None,
             "m_page": m_page, "m_pages": m_pages, "m_total": m_total,
             "m_dismissed_count": m_dismissed_count,
             "m_generated_at": missing_report.get("generated_at") if missing_report else None,
-            "t_page": t_page, "t_pages": t_pages, "t_total": t_total,
-            "t_dismissed_count": t_dismissed_count,
-            "t_generated_at": trending_report.get("generated_at") if trending_report else None,
-            "trending_feeds_enabled": bool(TRENDING_FEEDS),
+            # Discovery sections (replaces flat trending_items)
+            "discovery_sections":     _disc_sections,
+            "discovery_generated_at": _disc_generated_at,
+            "discovery_total":        _disc_total,
+            "discovery_enabled":      bool(DISCOVERY_FEEDS),
             "enabled_services": ENABLED_SERVICES,
             "slskd_enabled": SLSKD_ENABLED,
         },
@@ -348,7 +357,14 @@ async def section_full_view(
     dismissed_count = 0
 
     if section == "trending":
-        raw_items = await get_trending()
+        disc = await get_discovery_results()
+        # Flatten all sections into one list for the full-page view
+        raw_items = (
+            disc.get("new_from_artists", [])
+            + disc.get("trending_near_taste", [])
+            + disc.get("genre_picks", [])
+        )
+        generated_at = disc.get("generated_at")
         items_all, dismissed_count = _apply_dismissed(raw_items, "trending", dismissed)
     else:
         report = load_json_report(section)
@@ -401,7 +417,13 @@ async def section_fragment(
     dismissed_count = 0
 
     if section == "trending":
-        raw_items = await get_trending()
+        disc = await get_discovery_results()
+        raw_items = (
+            disc.get("new_from_artists", [])
+            + disc.get("trending_near_taste", [])
+            + disc.get("genre_picks", [])
+        )
+        generated_at = disc.get("generated_at")
         items_all, dismissed_count = _apply_dismissed(raw_items, "trending", dismissed)
     else:
         report = load_json_report(section)
@@ -524,7 +546,7 @@ async def log_stream(job_id: str, _: str = Depends(require_auth)):
 
 @app.post("/api/trending/refresh")
 async def trending_refresh(_: str = Depends(require_auth)):
-    await get_trending(force=True)
+    await get_discovery_results(force=True)
     return {"status": "ok"}
 
 

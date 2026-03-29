@@ -147,9 +147,23 @@
       {% else %}
       <div class="card-img-placeholder">No Artwork</div>
       {% endif %}
-      {# Source badge — replaces score badge #}
-      <span class="score-badge" style="{% if item.source == 'spotify' %}background:rgba(10,40,20,.92);color:#1DB954{% elif item.source == 'lastfm' %}background:rgba(40,10,10,.92);color:#e0454a{% else %}background:rgba(10,20,40,.92);color:#1da0c3{% endif %}">
-        {% if item.source == "spotify" %}Spotify{% elif item.source == "lastfm" %}Last.fm{% else %}Bandcamp{% endif %}
+      {# Source badge — colour-coded per source #}
+      {% set _src = item.source | default("") %}
+      <span class="score-badge" style="
+        {%- if _src == 'spotify'     %}background:rgba(10,40,20,.92);color:#1DB954
+        {%- elif _src == 'lastfm'    %}background:rgba(40,10,10,.92);color:#e0454a
+        {%- elif _src == 'aoty'      %}background:rgba(30,10,40,.92);color:#a78bfa
+        {%- elif _src == 'juno'      %}background:rgba(40,20,10,.92);color:#fb923c
+        {%- elif _src == 'listenbrainz' %}background:rgba(5,30,30,.92);color:#2dd4bf
+        {%- else                     %}background:rgba(10,20,40,.92);color:#1da0c3
+        {%- endif -%}">
+        {%- if _src == 'spotify'     %}Spotify
+        {%- elif _src == 'lastfm'    %}Last.fm
+        {%- elif _src == 'aoty'      %}AOTY
+        {%- elif _src == 'juno'      %}Juno
+        {%- elif _src == 'listenbrainz' %}LB
+        {%- else                     %}{{ _src | title }}
+        {%- endif -%}
       </span>
       {% set _stream_artist = item.artist_display %}
       {% set _stream_album  = item.album_title %}
@@ -193,19 +207,17 @@
       {% if item.release_date %}
       <div class="card-year">{{ item.release_date }}</div>
       {% endif %}
+      {% if item.reason %}
+      <div class="card-reason">{{ item.reason }}</div>
+      {% endif %}
     </div>
     <div class="card-actions">
       <div class="card-links">
         {% if item.source_url %}
         <a class="link-btn" href="{{ item.source_url }}" target="_blank" rel="noopener"
-           title="{% if item.source == 'spotify' %}Spotify{% elif item.source == 'lastfm' %}Last.fm{% else %}Bandcamp Daily{% endif %}">
-          {% if item.source == "spotify" %}
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.623.623 0 0 1-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.623.623 0 1 1-.277-1.215c3.809-.87 7.076-.496 9.712 1.115.294.18.387.563.207.857zm1.223-2.723a.78.78 0 0 1-1.072.257c-2.687-1.652-6.785-2.131-9.965-1.166a.78.78 0 1 1-.453-1.492c3.633-1.103 8.147-.569 11.233 1.329.37.227.484.71.257 1.072zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.937.937 0 1 1-.543-1.793c3.498-1.059 9.318-.855 12.998 1.35a.937.937 0 0 1-.838 1.599z"/></svg>
-          {% elif item.source == "lastfm" %}
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-          {% else %}
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5z"/></svg>
-          {% endif %}
+           title="{% if item.source == 'spotify' %}Spotify{% elif item.source == 'lastfm' %}Last.fm{% elif item.source == 'aoty' %}Album of the Year{% elif item.source == 'juno' %}Juno{% elif item.source == 'listenbrainz' %}ListenBrainz{% else %}Bandcamp Daily{% endif %}">
+          {# Generic external link icon for all sources #}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </a>
         {% endif %}
         <a class="link-btn" href="{{ item.discogs_url }}" target="_blank" rel="noopener" title="Discogs">
