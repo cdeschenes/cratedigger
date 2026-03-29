@@ -147,9 +147,12 @@ NAVIDROME_PASS=yourpass
 # SPOTIFY_CLIENT_SECRET=
 # YOUTUBE_API_KEY=
 
-# Optional: New & Trending sources (default: all three)
-# TRENDING_FEEDS=spotify,lastfm,bandcamp
-# LASTFM_API_KEY is reused for the trending chart feed
+# Optional: personalized New & Trending
+# LASTFM_USERNAME=your_lastfm_username
+# LISTENBRAINZ_USERNAME=your_lb_username
+
+# Optional: New & Trending sources (default: all nine)
+# DISCOVERY_FEEDS=spotify,lastfm,bandcamp,aoty,juno_electronic,juno_hiphop,juno_rock,juno_main,listenbrainz
 
 # Optional: SLSKD integration
 # SLSKD_URL=https://slskd.yourdomain.com
@@ -174,7 +177,7 @@ The health check returns `{"status": "ok"}` with no authentication required.
 
 ### Data persistence
 
-The compose file creates a named Docker volume (`cratedigger-data`) mounted at `/data` inside the container. This holds all reports, cache files, logs, and your dismissed items list. The volume persists across container restarts and image updates.
+The compose file creates a named Docker volume (`cratedigger-data`) mounted at `/data` inside the container. This holds all reports, cache files, the discovery database, logs, and your dismissed items list. The volume persists across container restarts and image updates.
 
 To mount a local music folder (only needed if you're not using Navidrome):
 
@@ -250,11 +253,39 @@ Raise this to tighten results — 0.2 or 0.3 tends to keep only clear genre matc
 
 How many candidates are collected per local artist before deduplication. The default of 2 means each artist in your library contributes at most 2 new candidates to the global pool. Last.fm returns similar artists in descending similarity order, so only the strongest candidates are taken.
 
-### TRENDING_FEEDS
+### DISCOVERY_FEEDS
 
-Comma-separated list of sources for the New & Trending section. Default: `spotify,lastfm,bandcamp`. Valid values: `spotify`, `lastfm`, `bandcamp`. Removing a source from the list disables it entirely.
+Comma-separated list of sources for the New & Trending section. Default: all nine sources enabled. Valid values:
 
-`spotify` requires `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`. `lastfm` reuses `LASTFM_API_KEY`. `bandcamp` needs no credentials.
+| Value | Source | Credentials |
+|---|---|---|
+| `spotify` | Spotify new releases API | `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` |
+| `lastfm` | Last.fm chart.getTopArtists | `LASTFM_API_KEY` (reused) |
+| `bandcamp` | Bandcamp Daily RSS | None |
+| `aoty` | Album of the Year RSS | None |
+| `juno_electronic` | Juno new releases — electronic | None |
+| `juno_hiphop` | Juno new releases — hip-hop/R&B | None |
+| `juno_rock` | Juno new releases — rock/indie | None |
+| `juno_main` | Juno new releases — all genres | None |
+| `listenbrainz` | ListenBrainz fresh-releases Atom feed | `LISTENBRAINZ_USERNAME` |
+
+Remove a source name to disable it. Leave `DISCOVERY_FEEDS` empty to hide the New & Trending section entirely.
+
+> **If upgrading from v1.2.x:** this variable replaces `TRENDING_FEEDS`. The format is the same (comma-separated), but the name changed and the valid values have expanded. Update your `.env`.
+
+### LASTFM_USERNAME
+
+Your Last.fm username (not your API key). Used by the discovery engine to fetch `user.getTopArtists` across three time periods (7day, 1month, 3month) and build a taste profile. Without it, New & Trending still runs but every release scores 0 for taste-match and falls through to Genre Picks.
+
+The taste profile is rebuilt once per day (24-hour TTL in the discovery database).
+
+### LISTENBRAINZ_USERNAME
+
+Your ListenBrainz username. Enables the `listenbrainz` feed in `DISCOVERY_FEEDS`. The feed fetches the ListenBrainz fresh-releases page for your account. Leave blank to skip this source.
+
+### LISTENBRAINZ_TOKEN
+
+Your ListenBrainz user token (found under your LB account settings). Optional — enables authenticated API calls. Without it, the feed still works but is limited to public data.
 
 ---
 
@@ -270,6 +301,8 @@ The dashboard has three job panels: Missing Popular Albums, Discover Similar Art
 - Next run time below each panel when a schedule is configured.
 
 A **Run All** button at the top triggers all three jobs at once. It is disabled while any job is running.
+
+A **Clear Cache** button at the top deletes the three output JSON files (`missing_popular_albums.json`, `discover_similar_artists.json`, `discovery_results.json`) and the two Last.fm cache files (`.cache/lastfm_top_albums.json`, `.cache/similar_artists.json`). A confirm dialog appears before anything is deleted. A toast notification confirms what was removed. `dismissed.json`, HTML reports, and log files are not affected. Use this before triggering a full re-run if you want a clean slate.
 
 ---
 
@@ -321,7 +354,7 @@ The ✕ button on each card permanently hides it from the viewer. Dismissed item
 
 ### Help page
 
-The Help page (`/help`) has two features worth knowing about:
+The Help page (`/help`) has two sections:
 
 **Debug Log** — opens a collapsible panel showing the last 1000 lines from the application logs, sourced from `/data/missing_popular_albums.log`, `/data/discover_similar_artists.log`, and an in-memory ring buffer. ERROR lines are highlighted red, WARNING yellow, DEBUG dim. A Refresh button re-fetches without closing the panel. Useful when a job reports failure and you want to see why without shelling into the container.
 
@@ -366,15 +399,75 @@ The status response looks like:
 
 ## New & Trending section
 
-The Report Viewer's third section shows new releases pulled from up to three sources:
+The Report Viewer's third section uses a taste-aware discovery engine (`webapp/discovery.py`). It pulls from up to 9 sources, scores results against your Last.fm scrobble history, and organizes them into three subsections.
 
-- Spotify — new releases via the Spotify new-releases API (requires `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET`)
-- Last.fm — top chart artists via `chart.getTopArtists` with their most popular album from `artist.getTopAlbums` (requires `LASTFM_API_KEY`)
-- Bandcamp — editorial picks from the Bandcamp Daily RSS feed (no credentials needed)
+### Sources
 
-The active sources are controlled by `TRENDING_FEEDS` in your `.env`. Remove a source name from the comma-separated list to disable it.
+| Source name | What it pulls |
+|---|---|
+| `spotify` | Spotify new-releases API (requires `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET`) |
+| `lastfm` | `chart.getTopArtists` top 50, each artist's most popular album (requires `LASTFM_API_KEY`) |
+| `bandcamp` | Bandcamp Daily RSS editorial picks (no credentials) |
+| `aoty` | Album of the Year RSS (no credentials) |
+| `juno_electronic` | Juno new releases — electronic (no credentials) |
+| `juno_hiphop` | Juno new releases — hip-hop/R&B (no credentials) |
+| `juno_rock` | Juno new releases — rock/indie (no credentials) |
+| `juno_main` | Juno new releases — all genres (no credentials) |
+| `listenbrainz` | ListenBrainz fresh-releases Atom feed for your account (requires `LISTENBRAINZ_USERNAME`) |
 
-Results from all active sources are merged by interleaving (for variety) and deduplicated on a normalized artist+album key. Albums already in your Navidrome library are automatically filtered out. The section refreshes every hour. To force a refresh, use the Run Now button on the New & Trending dashboard panel, or POST to `/run/trending`.
+Control which sources are active with `DISCOVERY_FEEDS` in your `.env`.
+
+### Taste profile
+
+When `LASTFM_USERNAME` is set, the engine fetches `user.getTopArtists` across three time periods (7day, 1month, 3month) and blends the results by weight to build a ranked artist list. It also fetches similar artists and genre tags for the top 20 of those. The profile is stored in the discovery SQLite database and rebuilt once per day.
+
+Without `LASTFM_USERNAME`, the taste profile is skipped. Every release scores 0 for taste-match and falls through to Genre Picks.
+
+### Scoring
+
+Each release is scored against the taste profile:
+
+| Component | Max points | Condition |
+|---|---|---|
+| `known_artist` | 40 | Artist is in your top scrobbled artists (40 for top 25, 25 for top 100, 15 otherwise) |
+| `related_artist` | 25 | Artist is similar to one of your top artists (25 if related via 2+ seeds, 12 if 1 seed) |
+| `trend` | 10 | Release appeared in 3+ sources (10), 2 sources (5), or 1 source (0) |
+| `recency` | 10 | Release date within the last 30 days |
+
+Genre scoring is reserved for a future release — the field exists in the database but is currently always 0.
+
+### Subsections
+
+Results are organized into three sections based on their score:
+
+- **New From Your Artists** — `known_artist` score ≥ 15. Releases from artists you actually scrobble.
+- **Trending Near Your Taste** — `related_artist` score > 0. Releases from artists similar to your scrobbled artists.
+- **Genre Picks** — Everything else with a positive total score. Appears when `LASTFM_USERNAME` is not set or for releases that match only on trend/recency.
+
+### Reason text
+
+Each card in New & Trending shows a short reason line explaining why it appeared — e.g., "New release from one of your top artists", "Related to Slowdive and DIIV", or "Trending across 3 discovery sources". This comes from the scoring engine, not the source feed.
+
+### Source badges
+
+Cards show a colored badge for each source the release was found in:
+
+| Badge | Color | Source |
+|---|---|---|
+| Spotify | green | `spotify` |
+| Last.fm | red | `lastfm` |
+| Bandcamp | teal | `bandcamp` |
+| AOTY | purple | `aoty` |
+| Juno | orange | any `juno_*` feed |
+| LB | teal | `listenbrainz` |
+
+A release appearing in multiple sources shows multiple badges.
+
+### Storage and cache
+
+Releases, source mappings, scores, and the taste profile are stored in `/data/discovery.db` (SQLite). This is part of the `cratedigger-data` volume and persists across restarts.
+
+The rendered result set is cached for 2 hours. To force a refresh, use the Run Now button on the New & Trending dashboard panel, or `POST /run/trending`. Owned albums are filtered out when Navidrome credentials are configured.
 
 ---
 
@@ -541,9 +634,11 @@ If `NAVIDROME_MUSIC_FOLDER` is not set or is empty, the scan queries all librari
 
 Both cache files include a version number. A version mismatch (caused by a `CACHE_VERSION` change in the code) causes a complete cache discard on the next run, then rebuilds from scratch.
 
+The discovery engine stores its data in `/data/discovery.db` (SQLite). The rendered result set is cached for 2 hours. The taste profile has a 24-hour TTL.
+
 ### When to clear the cache
 
-The cache doesn't auto-expire, so you only need to clear it if:
+The Last.fm cache doesn't auto-expire, so you only need to clear it if:
 
 - You've added many new artists and want to force a full re-fetch (though new artists will be fetched fresh on cache miss anyway)
 - Last.fm changed their data significantly for an artist
@@ -551,7 +646,9 @@ The cache doesn't auto-expire, so you only need to clear it if:
 
 ### How to clear the cache
 
-Delete the relevant JSON file:
+**From the web UI:** use the Clear Cache button on the Run Dashboard. This deletes the three output JSON files and both Last.fm cache files in one step.
+
+**From the command line:**
 
 ```bash
 rm .cache/lastfm_top_albums.json   # missing_popular_albums
@@ -561,6 +658,8 @@ rm .cache/similar_artists.json     # discover_similar_artists
 Or run with `--no-cache` to ignore the cache for one run without deleting it. Fresh data is written back either way.
 
 In Docker, the cache lives at `/data/.cache/` inside the container. The `cratedigger-data` Docker volume keeps it intact across restarts and image updates.
+
+To reset the discovery database (releases, scores, taste profile), delete `/data/discovery.db` — it will be recreated on the next run.
 
 ### Cache size
 
@@ -611,6 +710,14 @@ Check `docker logs cratedigger`. Common causes:
 - `SUGGESTIONS_PER_ARTIST` limits how many candidates each local artist contributes. Increasing it raises the global pool size.
 - Artists with no Last.fm similar-artist data are skipped silently.
 
+### New & Trending shows no personalized results
+
+Set `LASTFM_USERNAME` in your `.env` and restart the container. The taste profile is built on the next discovery run. You can force it immediately by clicking Run Now on the New & Trending panel. Without a taste profile, all releases fall through to Genre Picks scored only on trend (appearing in multiple sources) and recency.
+
+### New & Trending is missing from the viewer
+
+`DISCOVERY_FEEDS` is empty or not set to any valid source names. Check your `.env`. If you were previously using `TRENDING_FEEDS` (v1.2.x), rename it to `DISCOVERY_FEEDS` and add any new source names you want enabled.
+
 ---
 
 ## FAQ
@@ -625,7 +732,7 @@ They have high playcounts on Last.fm but you probably don't want them showing up
 
 **Why does `--no-cache` still write a cache file?**
 
-`--no-cache` means "don't trust the existing cache this time" — it still saves fresh data so the next run is fast. If you want to discard the cache entirely, delete the file manually.
+`--no-cache` means "don't trust the existing cache this time" — it still saves fresh data so the next run is fast. If you want to discard the cache entirely, delete the file manually or use the Clear Cache button on the dashboard.
 
 **Can I run both scripts at the same time?**
 
@@ -646,3 +753,7 @@ Speed and accuracy. The filesystem scan reads audio tags from every file, which 
 **Can I filter to multiple Navidrome libraries?**
 
 No. `NAVIDROME_MUSIC_FOLDER` is a single-value filter. If you want to scan multiple specific libraries but not all of them, leave `NAVIDROME_MUSIC_FOLDER` empty (scans everything) or run the script separately for each library with different env configs.
+
+**Why does the New & Trending Genre Picks section show releases unrelated to my taste?**
+
+Genre Picks catches everything with a positive total score — which currently means trend score (appearing in 2+ sources) or recency score (released in the last 30 days). Genre-based filtering is not yet implemented; the field is reserved in the scoring engine but always evaluates to 0. If you only want taste-matched results, look at the first two sections.

@@ -1,12 +1,12 @@
 # Cratedigger
 
-Two music discovery scripts that scan your collection and generate HTML reports from Last.fm data. Run them from the command line or let a Docker-hosted web dashboard trigger and schedule them.
+Two music discovery scripts that scan your collection and generate reports from Last.fm data. Run them from the command line or let a Docker-hosted web dashboard trigger and schedule them.
 
 **Missing Popular Albums** — for every artist you own, finds the single highest-playcount album or EP you don't have yet.
 
 **Discover Similar Artists** — queries Last.fm for artists similar to those in your collection, filters out anything you already own, and surfaces the top recommendation per candidate with their most popular album.
 
-**New & Trending** — pulls new releases from Spotify, Last.fm charts, and Bandcamp Daily. Filters out albums already in your library.
+**New & Trending** — pulls new releases from up to 9 sources (Spotify, Last.fm, Bandcamp, AOTY, Juno, ListenBrainz), scores them against your Last.fm scrobble history, and splits results into three sections: releases from artists you scrobble, releases from related artists, and everything else with a positive score.
 
 <p align="center">
   <img src="docs/screenshots/login.png" alt="Cratedigger login page" width="360">
@@ -139,14 +139,19 @@ All three of `NAVIDROME_URL`, `NAVIDROME_USER`, and `NAVIDROME_PASS` must be set
 | `SECRET_KEY` | | Any long random string. Used to sign session cookies. Required. |
 | `SCHEDULE_MISSING` | | 5-field cron expression for automatic runs of `missing_popular_albums.py`. Empty = disabled. Example: `0 3 * * 0` (Sunday 3 AM). |
 | `SCHEDULE_DISCOVER` | | 5-field cron expression for automatic runs of `discover_similar_artists.py`. Empty = disabled. |
-| `TRENDING_FEEDS` | `spotify,lastfm,bandcamp` | Comma-separated sources for New & Trending. Remove a source to disable it. Valid values: `spotify`, `lastfm`, `bandcamp`. Bandcamp requires no credentials. |
+| `DISCOVERY_FEEDS` | all sources | Comma-separated list of enabled New & Trending sources. Valid values: `spotify`, `lastfm`, `bandcamp`, `aoty`, `juno_electronic`, `juno_hiphop`, `juno_rock`, `juno_main`, `listenbrainz`. Leave empty to hide the section entirely. Replaces the old `TRENDING_FEEDS` variable. |
+| `LASTFM_USERNAME` | | Your Last.fm username. Required for the taste profile that drives personalized scoring in New & Trending. Without it, discovery still runs but results are unscored. |
+| `LISTENBRAINZ_USERNAME` | | Your ListenBrainz username. Enables the ListenBrainz fresh-releases feed. |
+| `LISTENBRAINZ_TOKEN` | | ListenBrainz user token. Optional; enables authenticated API calls to ListenBrainz. |
 | `DATA_DIR` | `/data` | Directory where the web app looks for reports. Set automatically in Docker. |
-| `SPOTIFY_CLIENT_ID` | | Spotify app client ID. Enables Spotify embeds in the viewer and Spotify results in New & Trending. Requires a Spotify Premium account to register a dev app (as of Feb 2026). |
+| `SPOTIFY_CLIENT_ID` | | Spotify app client ID. Enables Spotify embeds in the viewer and the Spotify source in New & Trending. Requires a Spotify Premium account to register a dev app (as of Feb 2026). |
 | `SPOTIFY_CLIENT_SECRET` | | Spotify app client secret. |
 | `YOUTUBE_API_KEY` | | YouTube Data API v3 key. Enables YouTube embeds in the viewer. Must have the Data API v3 enabled in Google Cloud Console (not the IFrame Player API). |
 | `SLSKD_URL` | | Base URL of your SLSKD instance, e.g. `https://slskd.yourdomain.com`. Enables the SLSKD search button on every card. |
 | `SLSKD_API_KEY` | | API key for SLSKD (set in `appsettings.yml` under `web.authentication.api_keys`). Preferred over username/password. |
 | `SLSKD_USER` / `SLSKD_PASS` | | Fallback credentials if not using an API key. |
+
+> **Note:** `TRENDING_FEEDS` from v1.2.x is replaced by `DISCOVERY_FEEDS` in v1.3.0. The variable name changed; the format (comma-separated source names) is the same.
 
 ---
 
@@ -173,6 +178,8 @@ Both scripts share these flags:
 The Docker container runs a FastAPI app on port 8080. The dashboard has three job panels: Missing Popular Albums, Discover Similar Artists, and New & Trending. Each panel shows a status badge (idle, running, succeeded, failed), a Run Now button, the last run time, the next scheduled run if configured, and the exit code.
 
 A **Run All** button at the top triggers all three jobs at once. It is disabled while any job is running.
+
+A **Clear Cache** button deletes all output JSON files and Last.fm cache files, then confirms via a toast. `dismissed.json` and logs are not touched. Useful before a full re-run when you want to start from a clean slate.
 
 When a job starts, the panel opens a live log area and streams script output line by line via SSE. Reloading mid-run replays the buffered log (up to 2000 lines) before the live stream resumes.
 
@@ -204,6 +211,7 @@ Each card includes:
 | POST | `/api/trending/refresh` | Session | Force-refresh the trending cache |
 | GET | `/api/debug-log` | Session | Last 1000 lines of application logs (used by Help page debug viewer) |
 | GET | `/api/stream-info` | Session | Look up streaming embed URL for an album |
+| POST | `/api/clear-cache` | Session | Delete output JSON files and Last.fm cache files |
 | POST | `/api/slskd-search` | Session | Queue album search on a running SLSKD instance |
 | POST | `/dismiss` | Session | Add item to dismissed list |
 | DELETE | `/dismiss` | Session | Remove item from dismissed list |
@@ -229,6 +237,8 @@ Last.fm responses are cached in `.cache/` as JSON files. Typical size is 17–36
 
 `--no-cache` skips reading the cache but still writes fresh data at the end. Cache version is embedded in each file — a version mismatch causes a full re-fetch on the next run, which also overwrites the old cache.
 
+New & Trending uses a SQLite database at `/data/discovery.db` for release deduplication and taste profile storage. The database is part of the `cratedigger-data` volume. Results are cached for 2 hours; the taste profile is rebuilt once per day.
+
 ---
 
 ## Troubleshooting
@@ -243,7 +253,11 @@ Check the log file — artists with no Last.fm data log `No albums found on Last
 
 **Cache seems stale after a library change**
 
-Run with `--no-cache` to force fresh Last.fm data. The cache doesn't auto-expire — it only updates when an artist is looked up and the cache misses.
+Run with `--no-cache` to force fresh Last.fm data. The cache doesn't auto-expire — it only updates when an artist is looked up and the cache misses. In the web UI, the Clear Cache button on the Run Dashboard deletes all output JSON files and Last.fm cache files in one step.
+
+**New & Trending results are unscored or not personalized**
+
+Set `LASTFM_USERNAME` in `.env` and restart the container. Without it, the taste profile is skipped and all releases fall through to the Genre Picks section with only trend and recency scores. The first run after setting it rebuilds the profile from your top artists.
 
 **Auth not working in the web app**
 
