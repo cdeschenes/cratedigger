@@ -87,10 +87,10 @@ DISCOVERY_FEEDS: list[str] = [f.strip() for f in _DISCOVERY_FEEDS_RAW.split(",")
 
 # Juno genre feed URLs (slug may need adjustment if Juno changes their URL structure)
 _JUNO_FEED_URLS: dict[str, str] = {
-    "juno_electronic": "https://www.juno.co.uk/feeds/new-releases/dnd/",
-    "juno_hiphop":     "https://www.juno.co.uk/feeds/new-releases/hip-hop-r-n-b/",
-    "juno_rock":       "https://www.juno.co.uk/feeds/new-releases/rock-indie/",
-    "juno_main":       "https://www.juno.co.uk/feeds/new-releases/all/",
+    "juno_electronic": "https://www.juno.co.uk/dance-and-electronic-music/feeds/rss",
+    "juno_hiphop":     "https://www.juno.co.uk/hip-hop/feeds/rss",
+    "juno_rock":       "https://www.juno.co.uk/rock/feeds/rss",
+    "juno_main":       "https://www.juno.co.uk/all/feeds/rss",
 }
 
 _AOTY_FEED_URL = "https://www.albumoftheyear.org/rss/"
