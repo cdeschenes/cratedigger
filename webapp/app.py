@@ -319,7 +319,7 @@ async def viewer(
         for key in _disc_sections:
             raw = discovery_report.get(key, [])
             filtered, _ = _apply_dismissed(raw, "trending", dismissed)
-            _disc_sections[key] = filtered[:ITEMS_PER_PAGE]
+            _disc_sections[key] = filtered
         _disc_total = sum(len(v) for v in _disc_sections.values())
 
     return templates.TemplateResponse(
