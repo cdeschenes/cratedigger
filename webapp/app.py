@@ -468,7 +468,7 @@ async def section_fragment(
 async def dashboard(request: Request, _: str = Depends(require_auth)):
     jobs = get_all_status()
     reports = {job_id: (DATA_DIR / filename).exists() for job_id, filename in REPORT_FILES.items()}
-    reports["trending"] = False  # no HTML report for trending
+    reports["trending"] = (DATA_DIR / JSON_FILES["trending"]).exists()
     json_data = {job_id: (DATA_DIR / filename).exists() for job_id, filename in JSON_FILES.items()}
     next_runs = {job_id: get_next_run(job_id) for job_id in REPORT_FILES}
     next_runs["trending"] = None
@@ -503,6 +503,11 @@ async def help_page(request: Request, _: str = Depends(require_auth)):
 
 @app.get("/report/{job_id}")
 async def serve_report(job_id: str, _: str = Depends(require_auth)):
+    if job_id == "trending":
+        path = DATA_DIR / JSON_FILES["trending"]
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="Report not yet generated — run the script first")
+        return FileResponse(path, media_type="application/json")
     if job_id not in REPORT_FILES:
         raise HTTPException(status_code=404, detail="Unknown report")
     path = DATA_DIR / REPORT_FILES[job_id]

@@ -149,6 +149,7 @@
 <script>
 async function imgFallback(img) {
   img.onerror = null;
+  img.onload  = null;
   const artist = img.dataset.artist || '';
   const album  = img.dataset.album  || '';
   if (artist && album) {

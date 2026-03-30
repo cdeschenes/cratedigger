@@ -223,7 +223,7 @@
           class="btn btn-view {% if not has_report %}btn-disabled{% endif %}"
           {% if has_report %}href="/report/{{ job_id }}" target="_blank"{% endif %}
         >
-          Raw Report
+          {% if job_id == "trending" %}Raw JSON{% else %}Raw Report{% endif %}
         </a>
       </div>
 

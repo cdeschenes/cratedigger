@@ -258,6 +258,7 @@ async def _fetch_lastfm_chart() -> list[RawItem]:
                             artist_name, title, "lastfm",
                             image_url=image_url,
                             item_url=album.get("url"),
+                            release_date=datetime.now().strftime("%Y-%m-%d"),
                         )
                         if item:
                             items.append(item)
@@ -304,7 +305,12 @@ async def _fetch_bandcamp() -> list[RawItem]:
                 m2 = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.get("summary", ""))
                 if m2:
                     image_url = m2.group(1)
-            item = _raw(artist_display, album_title, "bandcamp", image_url=image_url, item_url=link)
+            pub_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+            release_date = (
+                f"{pub_parsed.tm_year:04d}-{pub_parsed.tm_mon:02d}-{pub_parsed.tm_mday:02d}"
+                if pub_parsed else None
+            )
+            item = _raw(artist_display, album_title, "bandcamp", image_url=image_url, item_url=link, release_date=release_date)
             if item:
                 items.append(item)
         logger.info("Bandcamp Daily: %d releases", len(items))
@@ -652,21 +658,31 @@ def _score_releases(
     Returns a list of score dicts ready for save_scores().
     """
     if not taste:
-        # No taste profile — assign uniform trend-only scores
+        # No taste profile — score on trend + recency only
         scored = []
         for r in releases:
             sources = source_counts.get(r["id"], [])
             trend   = 10 if len(sources) >= 3 else (5 if len(sources) >= 2 else 0)
+            recency = _recency_score(r.get("release_date"))
+            total   = trend + recency
+            if trend >= 10:
+                reason = f"Trending across {len(sources)} discovery sources"
+            elif trend > 0:
+                reason = "Appearing in multiple discovery sources"
+            elif recency > 0:
+                reason = "Recent release"
+            else:
+                reason = ""
             scored.append({
                 "release_id":           r["id"],
                 "known_artist_score":   0,
                 "related_artist_score": 0,
                 "genre_score":          0,
                 "trend_score":          trend,
-                "recency_score":        _recency_score(r.get("release_date")),
-                "total_score":          trend + _recency_score(r.get("release_date")),
-                "section":              "genre_picks" if trend > 0 else "",
-                "reason_text":          "Trending across multiple discovery sources" if trend else "",
+                "recency_score":        recency,
+                "total_score":          total,
+                "section":              "genre_picks" if total > 0 else "",
+                "reason_text":          reason,
                 "_sources": sources,
                 "_release": r,
             })

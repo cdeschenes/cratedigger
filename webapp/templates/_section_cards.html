@@ -142,7 +142,8 @@
   <div class="report-card">
     <div class="card-image-wrap">
       <img class="card-img" src="{{ item.image_url or 'data:,' }}" alt="{{ item.album_title }}" loading="lazy"
-           onerror="imgFallback(this)" data-artist="{{ item.artist_display }}" data-album="{{ item.album_title }}">
+           onerror="imgFallback(this)" onload="if(!this.naturalWidth)imgFallback(this)"
+           data-artist="{{ item.artist_display }}" data-album="{{ item.album_title }}">
       {# Source badge — colour-coded per source #}
       {% set _src = item.source | default("") %}
       <span class="score-badge" style="
