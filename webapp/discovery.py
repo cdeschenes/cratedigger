@@ -679,6 +679,7 @@ def _score_releases(
     releases: list[dict],
     taste: dict,
     source_counts: dict[int, list[str]],
+    library_artists: set[str] = frozenset(),
 ) -> list[dict]:
     """
     Score each release against the taste profile.
@@ -727,9 +728,13 @@ def _score_releases(
 
         # ── known_artist_score ──────────────────────────────────────────────
         known = 0
+        from_library_only = False
         if norm in top_artists_norm:
             rank, _ = top_artists_norm[norm]
             known = 40 if rank < 25 else (25 if rank < 100 else 15)
+        elif norm in library_artists:
+            known = 15
+            from_library_only = True
 
         # ── related_artist_score ────────────────────────────────────────────
         related_score = 0
@@ -770,7 +775,7 @@ def _score_releases(
             "recency_score":        recency,
             "total_score":          total,
             "section":              section,
-            "reason_text":          _build_reason(known, related_score, genre_score, trend_score, n_sources, related_seeds, taste),
+            "reason_text":          _build_reason(known, related_score, genre_score, trend_score, n_sources, related_seeds, taste, from_library_only),
             "_sources": sources,
             "_release": r,
         })
@@ -803,12 +808,15 @@ def _build_reason(
     n_sources: int,
     related_seeds: list[str],
     taste: dict,
+    from_library_only: bool = False,
 ) -> str:
     if known >= 40:
         return "New release from one of your top artists"
     if known >= 25:
         return "New release from an artist you listen to often"
     if known >= 15:
+        if from_library_only:
+            return "New release from an artist in your collection"
         return "New release from an artist in your listening history"
     if related >= 25 and len(related_seeds) >= 2:
         return f"Related to {related_seeds[0]} and {related_seeds[1]}"
@@ -906,8 +914,11 @@ async def _run_pipeline(conn) -> dict:
             add_source(conn, release_id, item.source_name, item.item_url, item.release_date)
     conn.commit()
 
-    # 3. Owned-album filter
+    # 3. Owned-album filter + library artist set
     owned = await _get_local_library()
+    library_artists: set[str] = {k.split("|")[0] for k in owned}
+    if library_artists:
+        logger.info("Navidrome library artists: %d unique artists", len(library_artists))
 
     # 4. Load all releases with source counts
     releases = load_all_releases_with_sources(conn)
@@ -924,7 +935,7 @@ async def _run_pipeline(conn) -> dict:
 
     # 6. Score releases
     source_counts = {r["id"]: r.get("sources", []) for r in releases}
-    scored = _score_releases(releases, taste, source_counts)
+    scored = _score_releases(releases, taste, source_counts, library_artists)
 
     # 7. Prune and save scores
     clear_scores(conn)
