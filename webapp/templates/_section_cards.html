@@ -141,12 +141,8 @@
   {% elif section == "trending" %}
   <div class="report-card">
     <div class="card-image-wrap">
-      {% if item.image_url %}
-      <img class="card-img" src="{{ item.image_url }}" alt="{{ item.album_title }}" loading="lazy"
+      <img class="card-img" src="{{ item.image_url or 'data:,' }}" alt="{{ item.album_title }}" loading="lazy"
            onerror="imgFallback(this)" data-artist="{{ item.artist_display }}" data-album="{{ item.album_title }}">
-      {% else %}
-      <div class="card-img-placeholder">No Artwork</div>
-      {% endif %}
       {# Source badge — colour-coded per source #}
       {% set _src = item.source | default("") %}
       <span class="score-badge" style="

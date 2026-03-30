@@ -277,8 +277,15 @@ async def viewer(
 ):
     discover_report = load_json_report("discover")
     missing_report  = load_json_report("missing")
-    # Discovery: use persisted file for fast initial render (AJAX refreshes use live cache)
-    discovery_report = load_json_report("trending") if DISCOVERY_FEEDS else None
+    # Discovery: read directly — format uses section keys, not "items", so load_json_report rejects it
+    discovery_report = None
+    if DISCOVERY_FEEDS:
+        _disc_path = DATA_DIR / JSON_FILES["trending"]
+        if _disc_path.exists():
+            try:
+                discovery_report = json.loads(_disc_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
     dismissed = load_dismissed()
 
     d_items_raw = discover_report["items"] if discover_report else None

@@ -78,7 +78,6 @@ _TASTE_TTL     = 86400  # 24 hours — taste profile rebuilt once per day
 
 _ALL_FEEDS = [
     "spotify", "lastfm", "bandcamp",
-    "aoty",
     "juno_electronic", "juno_hiphop", "juno_rock", "juno_main",
     "listenbrainz",
 ]
@@ -93,7 +92,10 @@ _JUNO_FEED_URLS: dict[str, str] = {
     "juno_main":       "https://www.juno.co.uk/all/feeds/rss",
 }
 
-_AOTY_FEED_URL = "https://www.albumoftheyear.org/rss/"
+# AOTY no longer exposes an album-release RSS feed — /rss/ returns an HTML index page.
+# Keeping the source name and fetcher in the map so existing configs don't break,
+# but the fetch returns empty and logs a one-time warning.
+_AOTY_FEED_URL = ""
 
 # Bandcamp Daily title patterns (migrated from trending.py)
 _BC_COMMA_QUOTE_RE = re.compile(r'^(.+?),\s*[\u201c"](.+?)[\u201d"]')
@@ -413,6 +415,9 @@ def _parse_title(title: str) -> tuple[str, str]:
 
 
 async def _fetch_aoty() -> list[RawItem]:
+    if not _AOTY_FEED_URL:
+        logger.warning("aoty source disabled — no album-release RSS feed available from albumoftheyear.org")
+        return []
     return await _fetch_generic_rss("aoty", _AOTY_FEED_URL, limit=25)
 
 
