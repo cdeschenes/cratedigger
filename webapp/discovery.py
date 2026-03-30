@@ -211,27 +211,54 @@ async def _fetch_spotify() -> list[RawItem]:
 
 
 async def _fetch_lastfm_chart() -> list[RawItem]:
-    """Last.fm chart.getTopArtists → top album per artist."""
+    """
+    Last.fm personalised source: user.getWeeklyArtistChart (if LASTFM_USERNAME set)
+    or chart.getTopArtists as fallback.
+
+    Weekly artist chart reflects what the user actually listened to this week,
+    making it far more likely to match the taste profile than global chart artists.
+    """
     if not _LASTFM_API_KEY:
         return []
     try:
         async with httpx.AsyncClient(timeout=12) as c:
-            r = await c.get(
-                "https://ws.audioscrobbler.com/2.0/",
-                params={
-                    "method": "chart.getTopArtists",
-                    "api_key": _LASTFM_API_KEY,
-                    "format": "json",
-                    "limit": 20,
-                },
-            )
-        if r.status_code != 200:
-            logger.warning("Last.fm chart.getTopArtists HTTP %s", r.status_code)
-            return []
-        top_artists = r.json().get("artists", {}).get("artist", [])
+            # Prefer personalised weekly chart; fall back to global chart
+            if _LASTFM_USERNAME:
+                r = await c.get(
+                    "https://ws.audioscrobbler.com/2.0/",
+                    params={
+                        "method": "user.getWeeklyArtistChart",
+                        "user": _LASTFM_USERNAME,
+                        "api_key": _LASTFM_API_KEY,
+                        "format": "json",
+                        "limit": 50,
+                    },
+                )
+                if r.status_code == 200:
+                    top_artists = r.json().get("weeklyartistchart", {}).get("artist", [])
+                    source_label = f"user weekly chart ({len(top_artists)} artists)"
+                else:
+                    top_artists = []
+            else:
+                top_artists = []
+
+            if not top_artists:
+                r = await c.get(
+                    "https://ws.audioscrobbler.com/2.0/",
+                    params={
+                        "method": "chart.getTopArtists",
+                        "api_key": _LASTFM_API_KEY,
+                        "format": "json",
+                        "limit": 20,
+                    },
+                )
+                top_artists = r.json().get("artists", {}).get("artist", []) if r.status_code == 200 else []
+                source_label = f"global chart ({len(top_artists)} artists)"
+
+        logger.info("Last.fm source: %s", source_label)
         items = []
         async with httpx.AsyncClient(timeout=10) as c:
-            for artist in top_artists[:15]:
+            for artist in top_artists[:30]:
                 artist_name = artist.get("name", "")
                 if not artist_name:
                     continue
@@ -264,10 +291,10 @@ async def _fetch_lastfm_chart() -> list[RawItem]:
                             items.append(item)
                 except Exception:
                     logger.debug("Last.fm album fetch failed for %s", artist_name)
-        logger.info("Last.fm chart: %d releases", len(items))
+        logger.info("Last.fm: %d releases", len(items))
         return items
     except Exception:
-        logger.exception("Error fetching Last.fm trending")
+        logger.exception("Error fetching Last.fm source")
         return []
 
 
@@ -558,14 +585,14 @@ async def _build_taste_profile(conn) -> dict:
             for k, v in top_50
         ]
 
-        # Similar artists for top 20
-        logger.info("Fetching similar artists for top 20...")
+        # Similar artists for top 50
+        logger.info("Fetching similar artists for top 50...")
         related: dict[str, dict] = {}
         similar_results = await asyncio.gather(*[
             lfm.artist_similar(a["name"], limit=30)
-            for a in top_artists[:20]
+            for a in top_artists[:50]
         ])
-        for seed_artist, similars in zip(top_artists[:20], similar_results):
+        for seed_artist, similars in zip(top_artists[:50], similar_results):
             seed_norm = seed_artist["normalized"]
             seed_weight = seed_artist["score"]
             for sim in similars:
@@ -581,7 +608,7 @@ async def _build_taste_profile(conn) -> dict:
                 related[sim_norm]["seeds"].append(seed_artist["name"])
                 related[sim_norm]["weight"] += seed_weight * float(sim.get("match", 0))
 
-        # Genre tags for top 20
+        # Genre tags for top 20 (tags for scoring, not display — top 20 is enough)
         logger.info("Fetching genre tags for top 20...")
         tag_results = await asyncio.gather(*[
             lfm.artist_top_tags(a["name"], top_n=8)
