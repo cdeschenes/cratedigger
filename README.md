@@ -6,7 +6,7 @@ Two music discovery scripts that scan your collection and generate reports from 
 
 **Discover Similar Artists** — queries Last.fm for artists similar to those in your collection, filters out anything you already own, and surfaces the top recommendation per candidate with their most popular album.
 
-**New & Trending** — pulls new releases from up to 9 sources (Spotify, Last.fm, Bandcamp, AOTY, Juno, ListenBrainz), scores them against your Last.fm scrobble history, and splits results into three sections: releases from artists you scrobble, releases from related artists, and everything else with a positive score.
+**New & Trending** — pulls new releases from up to 9 sources (Spotify, Last.fm, Bandcamp, AOTY, Juno, ListenBrainz), scores them against your Last.fm scrobble history and Navidrome library, and splits results into three sections: releases from artists you own or scrobble, releases from related artists, and everything else with a positive score.
 
 <p align="center">
   <img src="docs/screenshots/login.png" alt="Cratedigger login page" width="360">

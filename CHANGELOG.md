@@ -6,6 +6,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-03-30
+
+### Changed
+
+- New & Trending known-artist scoring now checks your full Navidrome library in
+  addition to Last.fm scrobble history. Any artist present in Navidrome receives
+  `known_artist_score = 15`, qualifying their releases for the **New From Your
+  Artists** section even if they don't appear in your Last.fm top artists.
+  Previously only the top 50 scrobbled artists were checked, leaving most of the
+  library unmatched. Requires Navidrome credentials; has no effect if only
+  `LASTFM_USERNAME` is set.
+
+- Reason text for library-matched cards is now "New release from an artist in
+  your collection" rather than "New release from an artist in your listening
+  history" (the latter is reserved for tail-end scrobble matches above rank 100).
+
+### Fixed
+
+- New & Trending home page preview capped at 4 items per subsection, matching
+  the other report sections. The full results remain available via the section
+  header link.
+
 ## [1.2.1] - 2026-03-24
 
 ### Added
