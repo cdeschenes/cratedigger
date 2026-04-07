@@ -6,6 +6,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.8] - 2026-04-07
+
+### Fixed
+
+- Streaming player buttons (Apple Music, Spotify, YouTube) completely broken
+  on the Report Viewer and full-section pages. Jinja2 autoescape was converting
+  the `"` quotes in the `slskdMode` JS constant to `&quot;` entities, producing
+  a parse error that silently killed all JavaScript on the page. Fixed by
+  rendering the value with `| tojson`, which bypasses autoescape correctly.
+
 ## [1.2.7] - 2026-04-07
 
 ### Fixed

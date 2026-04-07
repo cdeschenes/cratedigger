@@ -100,7 +100,7 @@
 </div>
 
 <script>
-  const slskdMode = {{ '"download"' if slskd_mode == 'download' else '"search"' }};
+  const slskdMode = {{ slskd_mode | tojson }};
   let dPage = {{ d_page }};
   let mPage = {{ m_page }};
 
