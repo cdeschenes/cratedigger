@@ -780,9 +780,8 @@ async def _slskd_download_flow(
         }
 
     # Step 5 — trigger downloads
-    download_payload = {
-        "files": [{"filename": f["filename"], "size": f["size"]} for f in files]
-    }
+    # SLSKD expects a bare array of QueueDownloadRequest objects, not a wrapper object
+    download_payload = [{"filename": f["filename"], "size": f["size"]} for f in files]
     async with httpx.AsyncClient() as c:
         dr = await c.post(
             f"{_SLSKD_URL}/api/v0/transfers/downloads/{username}",
