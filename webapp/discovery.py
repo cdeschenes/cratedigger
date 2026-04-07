@@ -405,6 +405,11 @@ async def _fetch_generic_rss(source_name: str, feed_url: str, limit: int = 20) -
                 m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.get("summary", ""))
                 if m:
                     image_url = m.group(1)
+            # Juno: construct cover URL from product ID (pattern: CS{id}A-BIG.jpg)
+            if not image_url and source_name.startswith("juno") and link:
+                m_juno = re.search(r"/(\d+-\d+)/?$", link)
+                if m_juno:
+                    image_url = f"https://imagescdn.juno.co.uk/full/CS{m_juno.group(1)}A-BIG.jpg"
 
             artist, album = _parse_title(raw_title)
             item = _raw(artist, album, source_name, release_date=pub_date, image_url=image_url, item_url=link)

@@ -162,6 +162,9 @@ async function imgFallback(img) {
         const result = (await r.json()).results?.[0];
         if (result?.artworkUrl100) {
           img.src = result.artworkUrl100.replace('100x100bb', '600x600bb');
+          img.style.display = '';
+          const sib = img.nextElementSibling;
+          if (sib?.classList.contains('card-img-placeholder')) sib.style.display = 'none';
           return;
         }
       }
@@ -173,6 +176,10 @@ async function imgFallback(img) {
   ph.textContent = 'No Artwork';
   img.after(ph);
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-needs-artwork]').forEach(img => imgFallback(img));
+});
 
 (async () => {
   const el = document.getElementById('nav-version');

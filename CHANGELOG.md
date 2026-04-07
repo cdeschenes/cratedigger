@@ -6,6 +6,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-04-07
+
+### Fixed
+
+- Juno records now show album artwork. The Juno RSS feed contains no cover
+  images, but the product ID in each entry's URL can be used to construct the
+  image URL directly (`imagescdn.juno.co.uk/full/CS{id}A-BIG.jpg`).
+
+- ListenBrainz cards now attempt an iTunes artwork lookup when no image is
+  available in the feed. Previously this fallback was accidentally disabled
+  when the broken `data:,` placeholder was removed. Cards where iTunes finds
+  nothing still show the "No Artwork" placeholder.
+
 ## [1.2.4] - 2026-04-07
 
 ### Fixed

@@ -146,6 +146,9 @@
            onerror="imgFallback(this)"
            data-artist="{{ item.artist_display }}" data-album="{{ item.album_title }}">
       {% else %}
+      <img class="card-img" style="display:none" alt="{{ item.album_title }}"
+           data-artist="{{ item.artist_display }}" data-album="{{ item.album_title }}"
+           data-needs-artwork="1">
       <div class="card-img-placeholder">No Artwork</div>
       {% endif %}
       {# Source badge — colour-coded per source #}
