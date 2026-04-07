@@ -6,6 +6,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-04-07
+
+### Fixed
+
+- Discover Similar Artists no longer surfaces cross-genre false positives caused
+  by decade tags. Era tags like `90s`, `80s`, `2000s`, and `retro` describe
+  *when* an artist was active, not *what they sound like*. These are now ignored
+  when computing Jaccard tag overlap, so a hip-hop and a gothic rock artist
+  sharing only a decade tag no longer pass the genre filter.
+
 ## [1.2.2] - 2026-03-30
 
 ### Changed

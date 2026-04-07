@@ -94,6 +94,11 @@ IGNORED_TAGS: frozenset[str] = frozenset({
     "under 2000 listeners", "not on spotify",
     # noise
     "music", "good", "cool", "beautiful", "nice",
+    # era/decade — temporal metadata, not genre; shared decade ≠ shared sound
+    "50s", "60s", "70s", "80s", "90s", "00s", "10s", "20s",
+    "1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", "2020s",
+    "oldies", "classic", "retro", "vintage", "throwback",
+    "20th century", "21st century",
 })
 
 
