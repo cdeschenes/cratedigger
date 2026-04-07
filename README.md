@@ -147,9 +147,14 @@ All three of `NAVIDROME_URL`, `NAVIDROME_USER`, and `NAVIDROME_PASS` must be set
 | `SPOTIFY_CLIENT_ID` | | Spotify app client ID. Enables Spotify embeds in the viewer and the Spotify source in New & Trending. Requires a Spotify Premium account to register a dev app (as of Feb 2026). |
 | `SPOTIFY_CLIENT_SECRET` | | Spotify app client secret. |
 | `YOUTUBE_API_KEY` | | YouTube Data API v3 key. Enables YouTube embeds in the viewer. Must have the Data API v3 enabled in Google Cloud Console (not the IFrame Player API). |
-| `SLSKD_URL` | | Base URL of your SLSKD instance, e.g. `https://slskd.yourdomain.com`. Enables the SLSKD search button on every card. |
+| `SLSKD_URL` | | Base URL of your SLSKD instance, e.g. `https://slskd.yourdomain.com`. Enables the SLSKD button on every card. |
 | `SLSKD_API_KEY` | | API key for SLSKD (set in `appsettings.yml` under `web.authentication.api_keys`). Preferred over username/password. |
 | `SLSKD_USER` / `SLSKD_PASS` | | Fallback credentials if not using an API key. |
+| `SLSKD_MODE` | `search` | `search`: fire-and-forget queue (default). `download`: poll for results, pick the best peer, and queue the files automatically. |
+| `SLSKD_FORMAT` | `flac` | (`download` mode) Preferred file format: `flac` or `mp3`. |
+| `SLSKD_QUALITY_PREFER` | `24` | (`download` mode, FLAC) Preferred bit depth. Picks 24-bit files first; falls back to 16-bit if none are found. |
+| `SLSKD_MP3_BITRATE` | `320` | (`download` mode, MP3) Minimum bitrate (kbps). Falls back to any MP3 from the peer if no files meet the threshold. |
+| `SLSKD_SEARCH_TIMEOUT` | `30` | (`download` mode) Seconds to wait for search results before selecting from partial results. |
 
 > **Note:** `TRENDING_FEEDS` from v1.2.x is replaced by `DISCOVERY_FEEDS` in v1.3.0. The variable name changed; the format (comma-separated source names) is the same.
 
@@ -190,6 +195,7 @@ Each card includes:
 - Streaming preview — hover the album art to reveal service icons (Apple Music, Spotify, YouTube). Click one to open an embedded player directly inside the card. Apple Music requires no credentials; Spotify and YouTube require `SPOTIFY_*` / `YOUTUBE_API_KEY` in your `.env`.
 - Cover art fallback — if a Last.fm image fails to load, the card silently retries via the iTunes Search API (no credentials needed). If that also fails, a "No Artwork" placeholder appears.
 - Copy — copies the artist + album title to clipboard.
+- SLSKD — in `search` mode (default), queues a search on the Soulseek network. In `download` mode (`SLSKD_MODE=download`), the button polls for results, picks the best peer by format and quality, and queues the files automatically. The button label changes to "Download" when download mode is active.
 - Dismiss — hides the card permanently. Dismissed items are stored in `/data/dismissed.json` and excluded from future script runs.
 
 ---

@@ -6,6 +6,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-04-07
+
+### Added
+
+- SLSKD auto-download mode — set `SLSKD_MODE=download` to have the button
+  automatically pick the best Soulseek peer and queue files instead of just
+  queuing a search. Format is controlled by `SLSKD_FORMAT` (`flac` or `mp3`).
+  For FLAC, `SLSKD_QUALITY_PREFER=24` tries 24-bit first and falls back to
+  16-bit. For MP3, `SLSKD_MP3_BITRATE=320` requires 320 kbps, falling back to
+  any MP3 if needed. `SLSKD_SEARCH_TIMEOUT` (default 30s) controls how long to
+  wait for search results before selecting from partial results.
+
+- In download mode, the SLSKD button label changes to "Download", the tooltip
+  shows "Download via SLSKD", and the button shows "Searching…" while polling.
+  A success toast displays the artist, album, format, and file count. Failure
+  shows the reason from the server.
+
 ## [1.2.5] - 2026-04-07
 
 ### Fixed

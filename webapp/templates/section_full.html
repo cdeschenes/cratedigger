@@ -78,6 +78,7 @@
 </div>
 
 <script>
+  const slskdMode = {{ '"download"' if slskd_mode == 'download' else '"search"' }};
   let _activePlayerBtn = null;
 
   function _closeActivePlayer() {
@@ -156,27 +157,57 @@
   async function sendToSlskd(btn) {
     const artist = btn.dataset.artist;
     const album  = btn.dataset.album;
-    btn.disabled = true;
-    try {
-      const res = await fetch('/api/slskd-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ artist, album }),
-      });
-      if (res.ok) {
-        btn.classList.add('queued');
-        showToast(`Queued: ${artist} — ${album}`, 'ok');
-      } else {
+    if (slskdMode === 'download') {
+      const originalHTML = btn.innerHTML;
+      btn.classList.add('loading');
+      btn.innerHTML = 'Searching\u2026';
+      try {
+        const res = await fetch('/api/slskd-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ artist, album }),
+        });
+        const data = await res.json();
+        if (res.ok && data.queued) {
+          btn.classList.add('queued');
+          showToast(`Downloading: ${artist} \u2014 ${album} \u00b7 ${data.format} \u00b7 ${data.queued} files`, 'ok');
+          setTimeout(() => btn.classList.remove('queued'), 2000);
+        } else {
+          btn.classList.add('err');
+          showToast(data.note || 'Download failed', 'err');
+          setTimeout(() => btn.classList.remove('err'), 2000);
+        }
+      } catch {
         btn.classList.add('err');
-        showToast('SLSKD search failed', 'err');
+        setTimeout(() => btn.classList.remove('err'), 2000);
+        showToast('Could not reach SLSKD', 'err');
+      } finally {
+        btn.innerHTML = originalHTML;
+        btn.classList.remove('loading');
       }
-      setTimeout(() => btn.classList.remove('queued', 'err'), 2000);
-    } catch {
-      btn.classList.add('err');
-      setTimeout(() => btn.classList.remove('err'), 2000);
-      showToast('Could not reach SLSKD', 'err');
-    } finally {
-      btn.disabled = false;
+    } else {
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/slskd-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ artist, album }),
+        });
+        if (res.ok) {
+          btn.classList.add('queued');
+          showToast(`Queued: ${artist} \u2014 ${album}`, 'ok');
+        } else {
+          btn.classList.add('err');
+          showToast('SLSKD search failed', 'err');
+        }
+        setTimeout(() => btn.classList.remove('queued', 'err'), 2000);
+      } catch {
+        btn.classList.add('err');
+        setTimeout(() => btn.classList.remove('err'), 2000);
+        showToast('Could not reach SLSKD', 'err');
+      } finally {
+        btn.disabled = false;
+      }
     }
   }
 

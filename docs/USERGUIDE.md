@@ -336,9 +336,22 @@ Service setup:
 
 After adding credentials to `.env`, restart the container (`docker compose down && docker compose up -d`) — no rebuild required.
 
-### SLSKD search queue
+### SLSKD integration
 
-When SLSKD integration is configured, each card shows a SLSKD button in the action bar. Clicking it sends a search request directly to your running SLSKD instance via its REST API — no copy-paste, no tab-switching. The search appears in the SLSKD UI immediately for you to browse results and queue downloads.
+When SLSKD integration is configured, each card shows a button in the action bar. The button has two modes controlled by `SLSKD_MODE` in your `.env`:
+
+**Search mode (default — `SLSKD_MODE=search`):** Clicking the "SLSKD" button sends a search request to your running SLSKD instance. The search appears in the SLSKD UI immediately for you to browse results and queue downloads manually.
+
+**Download mode (`SLSKD_MODE=download`):** The button label changes to "Download". Clicking it triggers an automatic flow: Cratedigger submits a search, polls for results, picks the best available peer, and queues the files directly — no manual selection needed. Format and quality are controlled by:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SLSKD_FORMAT` | `flac` | Preferred format: `flac` or `mp3` |
+| `SLSKD_QUALITY_PREFER` | `24` | FLAC bit depth preference (24-bit first, 16-bit fallback) |
+| `SLSKD_MP3_BITRATE` | `320` | MP3 minimum bitrate (kbps); falls back to any MP3 if none qualify |
+| `SLSKD_SEARCH_TIMEOUT` | `30` | Seconds to wait for search results before selecting from partial results |
+
+While searching, the button shows "Searching…" and is disabled. On success, a toast shows the artist, album, format, and number of files queued. On failure, the reason is shown.
 
 Set `SLSKD_URL` and either `SLSKD_API_KEY` or `SLSKD_USER` / `SLSKD_PASS` in your `.env` to enable the button. The API key approach is simpler: add a key to `appsettings.yml` under `web.authentication.api_keys` in SLSKD.
 

@@ -20,6 +20,7 @@ Routes:
   DELETE /dismiss                — remove item from dismissed list
   GET  /dismissed                — return current dismissed list
 """
+import asyncio
 import json
 import logging
 import os
@@ -64,7 +65,7 @@ from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
 from webapp.discovery import DISCOVERY_FEEDS, get_discovery_results
 
-__version__ = "1.2.5"
+__version__ = "1.2.6"
 
 ITEMS_PER_PAGE = 4
 SECTION_FULL_PER_PAGE = 100
@@ -116,7 +117,12 @@ _SLSKD_API_KEY = os.environ.get("SLSKD_API_KEY", "")
 _SLSKD_USER    = os.environ.get("SLSKD_USER", "")
 _SLSKD_PASS    = os.environ.get("SLSKD_PASS", "")
 
-SLSKD_ENABLED = bool(_SLSKD_URL and (_SLSKD_API_KEY or (_SLSKD_USER and _SLSKD_PASS)))
+SLSKD_ENABLED         = bool(_SLSKD_URL and (_SLSKD_API_KEY or (_SLSKD_USER and _SLSKD_PASS)))
+SLSKD_MODE            = os.environ.get("SLSKD_MODE", "search").lower()      # "search" | "download"
+SLSKD_FORMAT          = os.environ.get("SLSKD_FORMAT", "flac").lower()      # "flac" | "mp3"
+_SLSKD_QUALITY_PREFER = int(os.environ.get("SLSKD_QUALITY_PREFER", "24"))   # 24 or 16 for FLAC
+_SLSKD_SEARCH_TIMEOUT = int(os.environ.get("SLSKD_SEARCH_TIMEOUT", "30"))   # poll timeout (seconds)
+_SLSKD_MP3_BITRATE    = int(os.environ.get("SLSKD_MP3_BITRATE", "320"))     # min kbps for MP3 mode
 
 _slskd_token: dict = {}   # {"token": str, "expires_at": float} — user/pass auth only
 
@@ -342,6 +348,7 @@ async def viewer(
             "discovery_enabled":      bool(DISCOVERY_FEEDS),
             "enabled_services": ENABLED_SERVICES,
             "slskd_enabled": SLSKD_ENABLED,
+            "slskd_mode": SLSKD_MODE,
         },
     )
 
@@ -401,6 +408,7 @@ async def section_full_view(
             "generated_at": generated_at,
             "enabled_services": ENABLED_SERVICES,
             "slskd_enabled": SLSKD_ENABLED,
+            "slskd_mode": SLSKD_MODE,
             "show_pager": False,
         },
     )
@@ -458,6 +466,7 @@ async def section_fragment(
             "generated_at": generated_at,
             "enabled_services": ENABLED_SERVICES,
             "slskd_enabled": SLSKD_ENABLED,
+            "slskd_mode": SLSKD_MODE,
         },
     )
 
@@ -630,6 +639,173 @@ async def stream_info(artist: str, album: str, service: str, _: str = Depends(re
 
 # ── SLSKD API ─────────────────────────────────────────────────────────────────
 
+async def _slskd_headers() -> dict[str, str]:
+    """Return auth headers for the SLSKD API."""
+    if _SLSKD_API_KEY:
+        return {"X-API-Key": _SLSKD_API_KEY}
+    token = await _get_slskd_token()
+    if not token:
+        raise HTTPException(status_code=503, detail="SLSKD authentication failed")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _slskd_pick_best_files(
+    responses: list[dict],
+    fmt: str,
+    quality_prefer: int,
+    mp3_bitrate: int,
+) -> tuple[str | None, list[dict], str]:
+    """
+    Select the best peer and files from SLSKD search responses.
+
+    Returns (username, files, quality_label) for the winner,
+    or (None, [], "") if no qualifying files found.
+
+    Scoring: (quality_tier, file_count) — quality first, then completeness.
+    """
+    candidates: list[tuple[str, list[dict], int, int, str]] = []  # (user, files, tier, count, label)
+
+    for resp in (responses or []):
+        username = resp.get("username", "")
+        all_files = resp.get("files", [])
+
+        ext = f".{fmt}"
+        matched = [f for f in all_files if f.get("filename", "").lower().endswith(ext)]
+        if not matched:
+            continue
+
+        if fmt == "flac":
+            hi = [f for f in matched if f.get("bitDepth") == quality_prefer]
+            lo = [f for f in matched if f not in hi]
+            if hi:
+                chosen, tier = hi, 2
+                label = f"FLAC {quality_prefer}-bit"
+            elif lo:
+                chosen, tier = lo, 1
+                label = "FLAC 16-bit"
+            else:
+                continue
+        else:  # mp3
+            hi = [f for f in matched if (f.get("bitRate") or 0) >= mp3_bitrate]
+            if hi:
+                chosen, tier = hi, 2
+                label = f"MP3 {mp3_bitrate}kbps"
+            else:
+                chosen, tier = matched, 1
+                label = "MP3 (below target)"
+
+        if chosen:
+            candidates.append((username, chosen, tier, len(chosen), label))
+
+    if not candidates:
+        return None, [], ""
+
+    best = max(candidates, key=lambda x: (x[2], x[3]))
+    return best[0], best[1], best[4]
+
+
+async def _slskd_download_flow(
+    headers: dict[str, str],
+    search_text: str,
+    artist: str,
+    album: str,
+) -> dict:
+    """Post a search, poll for results, pick the best peer, trigger downloads."""
+    # Step 1 — initiate search
+    async with httpx.AsyncClient() as c:
+        r = await c.post(
+            f"{_SLSKD_URL}/api/v0/searches",
+            json={"searchText": search_text},
+            headers=headers,
+            timeout=10,
+        )
+    if r.status_code not in (200, 201):
+        logger.warning("SLSKD search failed: HTTP %s — %s", r.status_code, r.text[:200])
+        raise HTTPException(status_code=502, detail="SLSKD search request failed")
+
+    search_id = r.json().get("id")
+    if not search_id:
+        raise HTTPException(status_code=502, detail="SLSKD did not return a search ID")
+
+    # Step 2 — poll until completed or timeout
+    deadline = time.monotonic() + _SLSKD_SEARCH_TIMEOUT
+    poll_interval = 2.0
+    final_state = "TimedOut"
+
+    async with httpx.AsyncClient() as c:
+        while time.monotonic() < deadline:
+            await asyncio.sleep(poll_interval)
+            try:
+                sr = await c.get(
+                    f"{_SLSKD_URL}/api/v0/searches/{search_id}",
+                    headers=headers,
+                    timeout=5,
+                )
+                state = sr.json().get("state", "") if sr.status_code == 200 else ""
+            except Exception:
+                state = ""
+            if state in ("Completed", "TimedOut"):
+                final_state = state
+                break
+            poll_interval = min(poll_interval * 1.3, 5.0)
+
+        # Step 3 — fetch responses
+        try:
+            resp_r = await c.get(
+                f"{_SLSKD_URL}/api/v0/searches/{search_id}/responses",
+                headers=headers,
+                timeout=10,
+            )
+            responses = resp_r.json() if resp_r.status_code == 200 else []
+        except Exception:
+            responses = []
+
+    if not responses:
+        return {
+            "queued": False,
+            "search_text": search_text,
+            "note": "No results found (search timed out)" if final_state == "TimedOut" else "No results found",
+        }
+
+    # Step 4 — pick best peer
+    username, files, quality_label = _slskd_pick_best_files(
+        responses, SLSKD_FORMAT, _SLSKD_QUALITY_PREFER, _SLSKD_MP3_BITRATE
+    )
+
+    if not username:
+        return {
+            "queued": False,
+            "search_text": search_text,
+            "note": f"No {SLSKD_FORMAT.upper()} files found in search results",
+        }
+
+    # Step 5 — trigger downloads
+    download_payload = {
+        "files": [{"filename": f["filename"], "size": f["size"]} for f in files]
+    }
+    async with httpx.AsyncClient() as c:
+        dr = await c.post(
+            f"{_SLSKD_URL}/api/v0/transfers/downloads/{username}",
+            json=download_payload,
+            headers=headers,
+            timeout=10,
+        )
+    if dr.status_code not in (200, 201):
+        logger.warning("SLSKD download trigger failed: HTTP %s — %s", dr.status_code, dr.text[:200])
+        raise HTTPException(status_code=502, detail="SLSKD download trigger failed")
+
+    logger.info(
+        "SLSKD download queued: %d files from %s (%s) — %s",
+        len(files), username, quality_label, search_text,
+    )
+    return {
+        "queued": len(files),
+        "peer": username,
+        "format": quality_label,
+        "search_text": search_text,
+    }
+
+
 async def _get_slskd_token() -> str | None:
     """Obtain a JWT from SLSKD via username/password. Cached for 23 hours."""
     if not (_SLSKD_USER and _SLSKD_PASS):
@@ -659,16 +835,13 @@ async def slskd_search(body: SlskdSearchRequest, _: str = Depends(require_auth))
     if not SLSKD_ENABLED:
         raise HTTPException(status_code=503, detail="SLSKD not configured")
 
-    headers: dict[str, str] = {}
-    if _SLSKD_API_KEY:
-        headers["X-API-Key"] = _SLSKD_API_KEY
-    else:
-        token = await _get_slskd_token()
-        if not token:
-            raise HTTPException(status_code=503, detail="SLSKD authentication failed")
-        headers["Authorization"] = f"Bearer {token}"
-
+    headers = await _slskd_headers()
     search_text = f"{body.artist} {body.album}"
+
+    if SLSKD_MODE == "download":
+        return await _slskd_download_flow(headers, search_text, body.artist, body.album)
+
+    # search mode — fire-and-forget
     async with httpx.AsyncClient() as c:
         r = await c.post(f"{_SLSKD_URL}/api/v0/searches",
                          json={"searchText": search_text},
