@@ -65,7 +65,7 @@ from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
 from webapp.discovery import DISCOVERY_FEEDS, get_discovery_results
 
-__version__ = "1.2.6"
+__version__ = "1.2.7"
 
 ITEMS_PER_PAGE = 4
 SECTION_FULL_PER_PAGE = 100

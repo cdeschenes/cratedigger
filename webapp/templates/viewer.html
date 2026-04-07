@@ -27,7 +27,7 @@
     </div>
     {% else %}
     <div id="section-discover-content">
-      {% with section="discover", items=discover_items, page=d_page, pages=d_pages, total=d_total, dismissed_count=d_dismissed_count, generated_at=d_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled %}
+      {% with section="discover", items=discover_items, page=d_page, pages=d_pages, total=d_total, dismissed_count=d_dismissed_count, generated_at=d_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled, slskd_mode=slskd_mode %}
       {% include "_section_cards.html" %}
       {% endwith %}
     </div>
@@ -52,7 +52,7 @@
     </div>
     {% else %}
     <div id="section-missing-content">
-      {% with section="missing", items=missing_items, page=m_page, pages=m_pages, total=m_total, dismissed_count=m_dismissed_count, generated_at=m_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled %}
+      {% with section="missing", items=missing_items, page=m_page, pages=m_pages, total=m_total, dismissed_count=m_dismissed_count, generated_at=m_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled, slskd_mode=slskd_mode %}
       {% include "_section_cards.html" %}
       {% endwith %}
     </div>
@@ -86,7 +86,7 @@
       {% if discovery_sections[subsection_key] %}
       <div class="discovery-subsection">
         <h3 class="discovery-subsection-title">{{ subsection_title }}</h3>
-        {% with section="trending", items=discovery_sections[subsection_key], page=1, pages=1, total=discovery_sections[subsection_key]|length, dismissed_count=0, generated_at=discovery_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled %}
+        {% with section="trending", items=discovery_sections[subsection_key], page=1, pages=1, total=discovery_sections[subsection_key]|length, dismissed_count=0, generated_at=discovery_generated_at, enabled_services=enabled_services, slskd_enabled=slskd_enabled, slskd_mode=slskd_mode %}
         {% include "_section_cards.html" %}
         {% endwith %}
       </div>

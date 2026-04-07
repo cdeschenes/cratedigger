@@ -6,6 +6,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-04-07
+
+### Fixed
+
+- Streaming player buttons (Apple Music, Spotify, YouTube) were broken on the
+  Report Viewer. The `{% with %}` blocks that include `_section_cards.html` for
+  all three sections did not pass `slskd_mode`, causing a Jinja `UndefinedError`
+  that corrupted the card HTML and broke all card interactivity.
+
 ## [1.2.6] - 2026-04-07
 
 ### Added
