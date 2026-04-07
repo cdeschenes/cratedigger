@@ -6,6 +6,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-04-07
+
+### Fixed
+
+- New & Trending cards with no album artwork now show a styled "No Artwork"
+  placeholder instead of a broken image icon. Previously, cards from sources
+  that don't provide cover art (such as ListenBrainz) rendered a blank broken
+  image because the template used an empty data URI (`data:,`) as a fallback.
+
 ## [1.2.3] - 2026-04-07
 
 ### Fixed
