@@ -65,7 +65,7 @@ from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
 from webapp.discovery import DISCOVERY_FEEDS, get_discovery_results
 
-__version__ = "1.2.8"
+__version__ = "1.2.9"
 
 ITEMS_PER_PAGE = 4
 SECTION_FULL_PER_PAGE = 100
@@ -661,7 +661,10 @@ def _slskd_pick_best_files(
     Returns (username, files, quality_label) for the winner,
     or (None, [], "") if no qualifying files found.
 
-    Scoring: (quality_tier, file_count) — quality first, then completeness.
+    Strategy: group each peer's files by parent directory, then score
+    by the largest single-directory group. This ensures a peer sharing
+    a full album folder beats one with many scattered single tracks.
+    Scoring: (quality_tier, dir_file_count) — quality first, then completeness.
     """
     candidates: list[tuple[str, list[dict], int, int, str]] = []  # (user, files, tier, count, label)
 
@@ -674,9 +677,21 @@ def _slskd_pick_best_files(
         if not matched:
             continue
 
+        # Group by parent directory so we prefer full album rips over scattered singles.
+        # SLSKD paths use backslash separators on Windows peers.
+        dir_groups: dict[str, list[dict]] = {}
+        for f in matched:
+            path = f.get("filename", "")
+            sep = "\\" if "\\" in path else "/"
+            parent = path.rsplit(sep, 1)[0] if sep in path else ""
+            dir_groups.setdefault(parent, []).append(f)
+
+        # Use the directory with the most matching files for this peer.
+        best_dir_files = max(dir_groups.values(), key=len)
+
         if fmt == "flac":
-            hi = [f for f in matched if f.get("bitDepth") == quality_prefer]
-            lo = [f for f in matched if f not in hi]
+            hi = [f for f in best_dir_files if f.get("bitDepth") == quality_prefer]
+            lo = [f for f in best_dir_files if f not in hi]
             if hi:
                 chosen, tier = hi, 2
                 label = f"FLAC {quality_prefer}-bit"
@@ -686,12 +701,12 @@ def _slskd_pick_best_files(
             else:
                 continue
         else:  # mp3
-            hi = [f for f in matched if (f.get("bitRate") or 0) >= mp3_bitrate]
+            hi = [f for f in best_dir_files if (f.get("bitRate") or 0) >= mp3_bitrate]
             if hi:
                 chosen, tier = hi, 2
                 label = f"MP3 {mp3_bitrate}kbps"
             else:
-                chosen, tier = matched, 1
+                chosen, tier = best_dir_files, 1
                 label = "MP3 (below target)"
 
         if chosen:

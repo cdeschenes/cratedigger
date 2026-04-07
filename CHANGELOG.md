@@ -6,6 +6,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.9] - 2026-04-07
+
+### Fixed
+
+- SLSKD download mode was downloading only one track instead of a full album.
+  The peer-selection algorithm scored by total matching file count across all
+  directories, so a peer with many scattered single tracks could beat a peer
+  with a complete album folder. Files are now grouped by parent directory per
+  peer, and scoring uses the largest single-directory group. A peer sharing a
+  full album rip will always win over one with scattered singles.
+
 ## [1.2.8] - 2026-04-07
 
 ### Fixed
