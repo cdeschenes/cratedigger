@@ -65,7 +65,7 @@ from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
 from webapp.discovery import DISCOVERY_FEEDS, get_discovery_results
 
-__version__ = "1.2.10"
+__version__ = "1.2.11"
 
 ITEMS_PER_PAGE = 4
 SECTION_FULL_PER_PAGE = 100
@@ -673,7 +673,11 @@ def _slskd_pick_best_files(
         all_files = resp.get("files", [])
 
         ext = f".{fmt}"
-        matched = [f for f in all_files if f.get("filename", "").lower().endswith(ext)]
+        matched = [
+            f for f in all_files
+            if f.get("filename", "").lower().endswith(ext)
+            and "vinyl" not in f.get("filename", "").lower()
+        ]
         if not matched:
             continue
 
