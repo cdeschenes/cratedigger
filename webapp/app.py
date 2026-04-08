@@ -65,7 +65,7 @@ from webapp.scheduler import get_next_run, start_scheduler, stop_scheduler
 from webapp.spotify import SPOTIFY_ENABLED, _get_spotify_token, _search_spotify
 from webapp.discovery import DISCOVERY_FEEDS, get_discovery_results
 
-__version__ = "1.2.11"
+__version__ = "1.2.12"
 
 ITEMS_PER_PAGE = 4
 SECTION_FULL_PER_PAGE = 100
@@ -673,11 +673,20 @@ def _slskd_pick_best_files(
         all_files = resp.get("files", [])
 
         ext = f".{fmt}"
-        matched = [
-            f for f in all_files
-            if f.get("filename", "").lower().endswith(ext)
-            and "vinyl" not in f.get("filename", "").lower()
-        ]
+        def _keep_file(fn: str) -> bool:
+            low = fn.lower()
+            if not low.endswith(ext):
+                return False
+            if "vinyl" in low:
+                return False
+            # Skip vinyl side-track naming: A01, B02, C1 … (letter then digit)
+            sep = "\\" if "\\" in fn else "/"
+            base = fn.rsplit(sep, 1)[-1]
+            if len(base) >= 2 and base[0].isalpha() and base[1].isdigit():
+                return False
+            return True
+
+        matched = [f for f in all_files if _keep_file(f.get("filename", ""))]
         if not matched:
             continue
 
