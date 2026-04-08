@@ -6,6 +6,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.10] - 2026-04-07
+
+### Fixed
+
+- "Similar to:" labels were assigned to the wrong candidates in the Discover
+  report. `asyncio.as_completed` returns tasks in completion order, but the
+  code was zipping them with `artist_items` in creation order — nearly always
+  a mismatch. Candidates were getting `source_artists` from whichever library
+  artist happened to finish its network request first, not the one that
+  actually triggered the similarity lookup. Fixed by returning `(artist, results)`
+  from the task so the pairing is always correct regardless of completion order.
+
 ## [1.2.9] - 2026-04-07
 
 ### Fixed

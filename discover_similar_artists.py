@@ -824,24 +824,28 @@ async def main() -> None:
     # --- Phase A: discover similar artists -----------------------------------
     candidates: dict[str, SimilarSuggestion] = {}
 
-    async def discover_bounded(artist: LocalArtist) -> list[tuple[str, str, float, str | None]]:
+    async def discover_bounded(
+        artist: LocalArtist,
+    ) -> tuple[LocalArtist, list[tuple[str, str, float, str | None]]]:
         async with semaphore:
-            return await find_similar_not_in_collection(
+            results = await find_similar_not_in_collection(
                 artist, client, local_normalized,
                 similar_cache, cache_lock, stats_lock, cache_stats, use_cache,
             )
+            return artist, results
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as http:
         client = LastFMClient(api_key=api_key, client=http)
 
         with tqdm(total=len(artist_items), desc="Finding similar artists", unit="artist") as progress:
             tasks_a = [asyncio.create_task(discover_bounded(a)) for a in artist_items]
-            for artist_obj, coro in zip(artist_items, asyncio.as_completed(tasks_a)):
+            for coro in asyncio.as_completed(tasks_a):
                 try:
-                    results = await coro
+                    artist_obj, results = await coro
                 except Exception as exc:  # pragma: no cover
-                    logging.exception("Error finding similar for %s: %s", artist_obj.display_name, exc)
-                    results = []
+                    logging.exception("Error finding similar: %s", exc)
+                    progress.update(1)
+                    continue
 
                 for display, normalized, score, url in results:
                     if normalized in candidates:
