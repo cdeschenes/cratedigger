@@ -65,9 +65,10 @@ _LASTFM_API_KEY      = os.environ.get("LASTFM_API_KEY", "")
 _LASTFM_USERNAME     = os.environ.get("LASTFM_USERNAME", "").strip()
 _LISTENBRAINZ_USERNAME = os.environ.get("LISTENBRAINZ_USERNAME", "").strip()
 
-_NAVIDROME_URL  = os.environ.get("NAVIDROME_URL",  "").strip()
-_NAVIDROME_USER = os.environ.get("NAVIDROME_USER", "").strip()
-_NAVIDROME_PASS = os.environ.get("NAVIDROME_PASS", "").strip()
+_NAVIDROME_URL    = os.environ.get("NAVIDROME_URL",  "").strip()
+_NAVIDROME_USER   = os.environ.get("NAVIDROME_USER", "").strip()
+_NAVIDROME_PASS   = os.environ.get("NAVIDROME_PASS", "").strip()
+_NAVIDROME_VERIFY = os.environ.get("NAVIDROME_VERIFY_SSL", "true").strip().lower() != "false"
 
 DATA_DIR       = Path(os.environ.get("DATA_DIR", "/data"))
 _DB_PATH       = DATA_DIR / "discovery.db"
@@ -501,7 +502,7 @@ async def _get_local_library() -> set[str]:
     owned: set[str] = set()
     size, offset = 500, 0
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=15, verify=_NAVIDROME_VERIFY) as client:
             while True:
                 r = await client.get(endpoint, params={**auth, "type": "alphabeticalByArtist", "size": str(size), "offset": str(offset)})
                 r.raise_for_status()

@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Navidrome library fetch failing with SSL/TLS or connection errors when `NAVIDROME_URL` points
+  to a public HTTPS domain (common in homelab setups with Traefik). Added `NAVIDROME_VERIFY_SSL`
+  env var (default: `true`); set to `false` to disable certificate verification when Navidrome
+  uses a self-signed or private-CA certificate. Applied to both `webapp/discovery.py` and
+  `webapp/trending.py`.
+
 ## [1.2.5] - 2026-04-07
 
 ### Fixed
