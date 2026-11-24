@@ -17,6 +17,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Release years on Missing Popular Albums and Discover Similar Artists were wrong for almost
+  every album. They came from Last.fm's `wiki.published`, which is the date the album's wiki
+  text was last edited, so *Enema of the State* (1999) showed 2026. Years now come from the
+  MusicBrainz release group's `first-release-date`, the earliest date across all editions and
+  reissues (new `release_years.py`, shared by both scripts). Lookups follow MusicBrainz's
+  1 request/second limit, retry on 503, and are cached in `.cache/release_years.json`; a year
+  is cached forever, "not found" is retried after 30 days. Albums MusicBrainz can't match
+  show no year instead of a wrong one. Set `RELEASE_YEAR_LOOKUP=false` to skip the lookups.
+  The first run after upgrading looks up every album once (about 1 s per album).
 - Navidrome library fetch failing with SSL/TLS or connection errors when `NAVIDROME_URL` points
   to a public HTTPS domain (common in homelab setups with Traefik). Added `NAVIDROME_VERIFY_SSL`
   env var (default: `true`); set to `false` to disable certificate verification when Navidrome

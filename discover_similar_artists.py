@@ -26,6 +26,8 @@ import httpx
 from rapidfuzz import fuzz
 from tqdm import tqdm
 
+from release_years import original_years
+
 from missing_popular_albums import (
     CONFIG,
     DEFAULT_WORKERS,
@@ -44,6 +46,7 @@ from missing_popular_albums import (
     cache_albums,
     load_cache,
     load_cached_albums,
+    normalize_album_title,
     normalize_text,
     pick_top_album_ep,
     save_cache,
@@ -999,6 +1002,17 @@ async def main() -> None:
     # Filter out candidates with no qualifying album, then sort
     suggestions = [s for s in candidates.values() if s.top_album_title]
     suggestions.sort(key=lambda s: s.similarity_score, reverse=True)
+
+    # Original release years from MusicBrainz (Last.fm's year is the wiki edit date)
+    lookup, years = await original_years(
+        [(s.candidate_display, s.top_album_title) for s in suggestions],
+        DISCOVER_CACHE_FILE.parent,
+        normalize_text,
+        normalize_album_title,
+    )
+    if lookup is not None:
+        for s in suggestions:
+            s.top_album_release_year = years.get(lookup.key(s.candidate_display, s.top_album_title))
 
     try:
         render_html(suggestions, DISCOVER_HTML_OUT, total_artists=len(artist_items))

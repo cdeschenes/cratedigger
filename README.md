@@ -106,6 +106,7 @@ All three of `NAVIDROME_URL`, `NAVIDROME_USER`, and `NAVIDROME_PASS` must be set
 | `REQUEST_DELAY_MIN` | `0.15` | Minimum random delay between Last.fm requests (seconds). |
 | `REQUEST_DELAY_MAX` | `0.3` | Maximum random delay between Last.fm requests (seconds). |
 | `MAX_RETRIES` | `3` | Retry attempts on Last.fm API errors. |
+| `RELEASE_YEAR_LOOKUP` | `true` | Look up each album's original release year on MusicBrainz (Last.fm has no reliable year). Cached in `.cache/release_years.json`; the first run takes about 1 s per album. `false` leaves years blank. |
 | `CACHE_VERSION` | `2` | Internal. Increment to force a full cache refresh after structural changes. |
 
 ### Output paths

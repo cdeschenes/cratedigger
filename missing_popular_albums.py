@@ -29,6 +29,8 @@ from mutagen import File
 from rapidfuzz import fuzz
 from tqdm import tqdm
 
+from release_years import original_years
+
 ENV_FILE = Path(__file__).with_name(".env")
 DEFAULT_CONFIG = {
     "MUSIC_ROOT": "/Volumes/NAS/Media/Music/Music_Server",
@@ -196,15 +198,6 @@ class LocalArtist:
         if normalized_album not in self.album_display:
             self.album_display[normalized_album] = display_album
         self.albums.add(normalized_album)
-
-
-def _parse_year(date_str: str | None) -> int | None:
-    """Extract a 4-digit year from a Last.fm date string like '21 May 1997, 00:00'."""
-    if not date_str or not date_str.strip():
-        return None
-    import re
-    m = re.search(r"\b(19|20)\d{2}\b", date_str)
-    return int(m.group()) if m else None
 
 
 @dataclass
@@ -753,9 +746,10 @@ async def fetch_album_tags(
         if isinstance(tag, dict) and tag.get("name")
     ]
     tags = tuple(name.lower() for name in tag_names if name)
-    wiki = album_section.get("wiki") or {}
-    year = _parse_year(wiki.get("published")) or _parse_year(album_section.get("releasedate"))
-    return tags, year
+    # No year from Last.fm: wiki.published is the wiki's last-edit date (a 1999 album can
+    # show 2026) and releasedate is nearly always blank. Original release years come from
+    # MusicBrainz in apply_original_years().
+    return tags, None
 
 
 def is_album_or_ep(title: str, tags: Sequence[str]) -> bool:
@@ -1279,6 +1273,20 @@ async def process_artist(
     )
 
 
+async def apply_original_years(suggestions: Sequence[AlbumSuggestion]) -> None:
+    """Set each suggestion's release_year to the album's original release year (MusicBrainz)."""
+    lookup, years = await original_years(
+        [(s.artist_display, s.album_title) for s in suggestions],
+        CACHE_FILE.parent,
+        normalize_text,
+        normalize_album_title,
+    )
+    if lookup is None:
+        return
+    for s in suggestions:
+        s.release_year = years.get(lookup.key(s.artist_display, s.album_title))
+
+
 def parse_arguments() -> argparse.Namespace:
     def worker_count(value: str) -> int:
         workers = int(value)
@@ -1422,6 +1430,8 @@ async def main() -> None:
                 progress.update(1)
 
     suggestions.sort(key=lambda item: (item.artist_normalized, item.album_normalized))
+
+    await apply_original_years(suggestions)
 
     try:
         render_html(suggestions, HTML_OUT, total_artists=len(artist_items))

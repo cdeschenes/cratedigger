@@ -507,7 +507,7 @@ A **Sort** dropdown next to the section title reorders the whole list (not just 
 | Discover Similar Artists | Best match (similarity score), Artist A–Z, Most popular, Similar to most of your artists, Release year: newest, Release year: oldest, Album A–Z |
 | New & Trending | Best match (taste score), Release date: newest, Release date: oldest, Most sources, Artist A–Z, Album A–Z |
 
-Many Last.fm albums have no release year. Those items always appear after the dated ones, whichever direction you sort.
+Release years are original release years from MusicBrainz (see [Cache management](#cache-management)). Albums MusicBrainz can't match have no year; those items always appear after the dated ones, whichever direction you sort.
 
 Dismiss buttons work the same way on the full-page view.
 
@@ -665,6 +665,8 @@ If `NAVIDROME_MUSIC_FOLDER` is not set or is empty, the scan queries all librari
 - `similar` — the similar-artist results per local artist
 - `top_albums` — top-album data per candidate artist
 - `tags` — genre tags per artist
+
+Both scripts share `.cache/release_years.json`: each album's original release year from MusicBrainz (the release group's `first-release-date`, i.e. the earliest edition, not a reissue). Found years never expire; albums MusicBrainz couldn't match are retried after 30 days. Delete the file to force every year to be looked up again (about 1 s per album, because MusicBrainz allows one request per second). Set `RELEASE_YEAR_LOOKUP=false` to skip the lookups entirely.
 
 Both cache files include a version number. A version mismatch (caused by a `CACHE_VERSION` change in the code) causes a complete cache discard on the next run, then rebuilds from scratch.
 
