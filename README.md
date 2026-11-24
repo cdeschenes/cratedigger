@@ -188,7 +188,7 @@ A **Clear Cache** button deletes all output JSON files and Last.fm cache files, 
 
 When a job starts, the panel opens a live log area and streams script output line by line via SSE. Reloading mid-run replays the buffered log (up to 2000 lines) before the live stream resumes.
 
-The **Report Viewer** (`/`) has three sections: Discover Similar Artists, Missing Popular Albums, and New & Trending. Sections use AJAX pagination — Prev/Next updates the cards in-place and browser back/forward works. Clicking a section title opens a full-page view at `/section/{section}` with 100 items per page and URL-based Prev/Next navigation. A back link returns to the main viewer.
+The **Report Viewer** (`/`) has three sections: Discover Similar Artists, Missing Popular Albums, and New & Trending. Sections use AJAX pagination — Prev/Next updates the cards in-place and browser back/forward works. Clicking a section title opens a full-page view at `/section/{section}` with 100 items per page, a Sort dropdown (alphabetical, release date, popularity, plus section-specific options like best match), and URL-based Prev/Next navigation. A back link returns to the main viewer.
 
 Each card includes:
 
@@ -208,7 +208,7 @@ Each card includes:
 | GET | `/` | Session | Combined report viewer |
 | GET | `/dashboard` | Session | Script run dashboard |
 | GET | `/help` | Session | Help and card reference, debug log viewer, and submit request modal |
-| GET | `/section/{missing\|discover\|trending}` | Session | Full-page paginated view of one section (100 items per page) |
+| GET | `/section/{missing\|discover\|trending}` | Session | Full-page paginated view of one section (100 items per page). Optional `?sort=` |
 | GET | `/report/{missing\|discover}` | Session | Serve the raw HTML report file |
 | POST | `/run/{missing\|discover\|trending}` | Session | Trigger a script run. Returns 409 if already running. |
 | GET | `/status/{missing\|discover\|trending}` | Session | JSON job status snapshot |

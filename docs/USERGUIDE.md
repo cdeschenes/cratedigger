@@ -499,6 +499,16 @@ The rendered result set is cached for 2 hours. To force a refresh, use the Run N
 
 Clicking a section title ("Discover Similar Artists", "Missing Popular Albums", or "New & Trending") in the Report Viewer opens a full-page view at `/section/{section}`. Items are shown 100 per page with URL-based Prev/Next navigation (`?page=N`). This replaces the previous behavior of loading all items at once, which was impractically slow with large result sets. A back link at the top returns to the main viewer.
 
+A **Sort** dropdown next to the section title reorders the whole list (not just the current page). The choice is kept in the URL (`?sort=...`), so Prev/Next and bookmarks keep it:
+
+| Section | Sort options (first is the default) |
+|---|---|
+| Missing Popular Albums | Artist A–Z, Most popular (Last.fm playcount), Release year: newest, Release year: oldest, Album A–Z |
+| Discover Similar Artists | Best match (similarity score), Artist A–Z, Most popular, Similar to most of your artists, Release year: newest, Release year: oldest, Album A–Z |
+| New & Trending | Best match (taste score), Release date: newest, Release date: oldest, Most sources, Artist A–Z, Album A–Z |
+
+Many Last.fm albums have no release year. Those items always appear after the dated ones, whichever direction you sort.
+
 Dismiss buttons work the same way on the full-page view.
 
 ---

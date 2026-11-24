@@ -6,6 +6,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Sort dropdown on the full-page section views (`/section/{section}?sort=...`). Missing Popular
+  Albums: artist A–Z (default), most popular, release year newest/oldest, album A–Z. Discover
+  Similar Artists: best match (default), artist A–Z, most popular, similar to most of your
+  artists, release year newest/oldest, album A–Z. New & Trending: best match (default), release
+  date newest/oldest, most sources, artist A–Z, album A–Z. Items with no value for the chosen
+  field (e.g. no release year) always sort last. The sort is kept across Prev/Next.
+
 ### Fixed
 
 - Navidrome library fetch failing with SSL/TLS or connection errors when `NAVIDROME_URL` points

@@ -355,12 +355,69 @@ async def viewer(
 
 # ── Full section page ─────────────────────────────────────────────────────────
 
+# ── Full-page section sorting ─────────────────────────────────────────────────
+#
+# Per-section sort options: key -> (label, key function, descending).
+# The first entry is the default and matches the order the data is stored in,
+# so the page looks unchanged until a sort is picked. Key functions return None
+# for missing values; those items always go last, whatever the direction.
+
+def _num(field: str):
+    return lambda i: i.get(field)
+
+
+def _text(field: str):
+    return lambda i: (i.get(field) or "").casefold() or None
+
+
+def _count(field: str):
+    return lambda i: len(i.get(field) or [])
+
+
+SECTION_SORTS: dict[str, dict[str, tuple]] = {
+    "missing": {
+        "artist":     ("Artist A–Z",           _text("artist_normalized"), False),
+        "popular":    ("Most popular",         _num("playcount"),          True),
+        "newest":     ("Release year: newest", _num("release_year"),       True),
+        "oldest":     ("Release year: oldest", _num("release_year"),       False),
+        "album":      ("Album A–Z",            _text("album_normalized"),  False),
+    },
+    "discover": {
+        "match":      ("Best match",           _num("similarity_score"),        True),
+        "artist":     ("Artist A–Z",           _text("candidate_normalized"),   False),
+        "popular":    ("Most popular",         _num("top_album_playcount"),     True),
+        "connected":  ("Similar to most of your artists", _count("source_artists"), True),
+        "newest":     ("Release year: newest", _num("top_album_release_year"),  True),
+        "oldest":     ("Release year: oldest", _num("top_album_release_year"),  False),
+        "album":      ("Album A–Z",            _text("top_album_title"),        False),
+    },
+    "trending": {
+        "match":      ("Best match",           _num("total_score"),        True),
+        "newest":     ("Release date: newest", _text("release_date"),      True),
+        "oldest":     ("Release date: oldest", _text("release_date"),      False),
+        "sources":    ("Most sources",         _count("sources"),          True),
+        "artist":     ("Artist A–Z",           _text("artist_normalized"), False),
+        "album":      ("Album A–Z",            _text("album_normalized"),  False),
+    },
+}
+
+
+def _sort_items(items: list, section: str, sort: str) -> list:
+    """Sort items by a SECTION_SORTS key. Missing values go last; ties keep stored order."""
+    _, key, descending = SECTION_SORTS[section][sort]
+    present = [i for i in items if key(i) is not None]
+    absent  = [i for i in items if key(i) is None]
+    present.sort(key=key, reverse=descending)
+    return present + absent
+
+
 @app.get("/section/{section}")
 async def section_full_view(
     section: str,
     request: Request,
     _: str = Depends(require_auth),
     page: int = 1,
+    sort: str = "",
 ):
     if section not in ("discover", "missing", "trending"):
         raise HTTPException(status_code=404, detail="Unknown section")
@@ -387,6 +444,12 @@ async def section_full_view(
             raw_items = report.get("items", [])
             items_all, dismissed_count = _apply_dismissed(raw_items, section, dismissed)
 
+    sort_options = SECTION_SORTS[section]
+    if sort not in sort_options:
+        sort = next(iter(sort_options))
+    if items_all:
+        items_all = _sort_items(items_all, section, sort)
+
     total = len(items_all) if items_all is not None else 0
     pages = max(1, -(-total // SECTION_FULL_PER_PAGE))
     page = max(1, min(page, pages))
@@ -410,6 +473,8 @@ async def section_full_view(
             "slskd_enabled": SLSKD_ENABLED,
             "slskd_mode": SLSKD_MODE,
             "show_pager": False,
+            "sort": sort,
+            "sort_options": {k: v[0] for k, v in sort_options.items()},
         },
     )
 

@@ -20,8 +20,39 @@
       font-weight: 700;
       color: #fff;
       letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .full-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: .75rem 1rem;
       margin-bottom: 1rem;
     }
+    .sort-form {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .82rem;
+      color: #555;
+    }
+    .sort-form select {
+      background: #1a1a1a;
+      color: #aaa;
+      border: 1px solid #252525;
+      border-radius: 6px;
+      padding: .4rem 1.8rem .4rem .7rem;
+      font: inherit;
+      font-size: .85rem;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right .65rem center;
+    }
+    .sort-form select:hover,
+    .sort-form select:focus { border-color: #3a3a3a; color: #ddd; outline: none; }
     .full-pager {
       display: flex;
       align-items: center;
@@ -56,20 +87,33 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     Report Viewer
   </a>
-  <h1 class="full-section-title">{{ section_title }}</h1>
+  <div class="full-section-head">
+    <h1 class="full-section-title">{{ section_title }}</h1>
+    {% if total > 1 %}
+    <form class="sort-form" method="get" action="/section/{{ section }}">
+      <label for="sort-select">Sort</label>
+      <select id="sort-select" name="sort" onchange="this.form.submit()">
+        {% for key, label in sort_options.items() %}
+        <option value="{{ key }}" {% if key == sort %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button type="submit">Apply</button></noscript>
+    </form>
+    {% endif %}
+  </div>
 
   {% include "_section_cards.html" %}
 
   {% if pages > 1 %}
   <div class="full-pager">
     <a class="full-pager-btn {% if page <= 1 %}disabled{% endif %}"
-       href="/section/{{ section }}?page={{ page - 1 }}">
+       href="/section/{{ section }}?page={{ page - 1 }}&amp;sort={{ sort }}">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       Prev
     </a>
     <span class="full-pager-info">{{ page }} / {{ pages }}</span>
     <a class="full-pager-btn {% if page >= pages %}disabled{% endif %}"
-       href="/section/{{ section }}?page={{ page + 1 }}">
+       href="/section/{{ section }}?page={{ page + 1 }}&amp;sort={{ sort }}">
       Next
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
     </a>
