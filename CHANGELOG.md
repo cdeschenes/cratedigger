@@ -20,6 +20,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Long script runs failing on the dashboard with exit code `-1` and leaving the script stuck in
+  the background. The job runner read output line by line, and Python refuses lines over
+  64 KiB; a progress bar redraws with `\r` and only ends its line when done, so a long one
+  (e.g. an hour of release-year lookups) went over the limit. The runner now reads in chunks,
+  keeps only the last redraw of each progress line, kills the script if anything goes wrong,
+  and keeps the error in the job log so it shows after a page reload. The release-year
+  progress bar also redraws every 15 s instead of after every lookup.
+
 - Nav bar overflowing on phones: "Sign out" was cut off at 390px wide, and at 320px wide "Run
   Dashboard" and "Help" were off-screen too. At 640px and narrower the nav is now two rows
   (brand + Sign out, then the page links sharing the full width). Also fixed page-content

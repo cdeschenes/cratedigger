@@ -6,6 +6,7 @@ Each subprocess job runs the corresponding Python script, captures stdout+stderr
 and fans the output out to any waiting SSE consumers.
 """
 import asyncio
+import codecs
 import sys
 from asyncio.subprocess import PIPE, STDOUT
 from collections import deque
@@ -89,8 +90,20 @@ async def run_job(job_id: str, no_cache: bool = False, workers: int | None = Non
     asyncio.create_task(_run_and_capture(job_id, cmd))
 
 
+def _emit(job_id: str, line: str) -> None:
+    """Store and broadcast one output line, as a terminal would show it.
+
+    tqdm progress bars redraw with '\\r' and only end with '\\n', so one "line" can
+    hold thousands of redraws. Keep only the text after the last '\\r'.
+    """
+    line = line.rsplit("\r", 1)[-1].rstrip()
+    if line.strip():
+        _log(job_id, line)
+
+
 async def _run_and_capture(job_id: str, cmd: list[str]) -> None:
     state = _jobs[job_id]
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -101,12 +114,19 @@ async def _run_and_capture(job_id: str, cmd: list[str]) -> None:
         state.pid = proc.pid
         assert proc.stdout is not None
 
-        async for raw_line in proc.stdout:
-            line = raw_line.decode("utf-8", errors="replace").rstrip()
-            if not line.strip():
-                continue
-            state.log_buffer.append(line)
-            _broadcast(job_id, line)
+        # Read in chunks, not lines: StreamReader's line reader raises ValueError on any
+        # line over 64 KiB, which a long-running tqdm bar (no '\n' until it finishes)
+        # easily exceeds. That used to fail the job and orphan the script.
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        pending = ""
+        while chunk := await proc.stdout.read(65536):
+            pending += decoder.decode(chunk)
+            *lines, pending = pending.split("\n")
+            for line in lines:
+                _emit(job_id, line)
+            # Keep only the current redraw of an unfinished progress-bar line
+            pending = pending.rsplit("\r", 1)[-1]
+        _emit(job_id, pending + decoder.decode(b"", final=True))
 
         exit_code = await proc.wait()
         state.exit_code = exit_code
@@ -114,7 +134,11 @@ async def _run_and_capture(job_id: str, cmd: list[str]) -> None:
     except Exception as exc:
         state.status = "failed"
         state.exit_code = -1
-        _broadcast(job_id, f"[webapp] Error launching job: {exc}")
+        _log(job_id, f"[webapp] Job error: {type(exc).__name__}: {exc}")
+        if proc is not None and proc.returncode is None:
+            # Don't leave the script running with nobody reading its output
+            proc.kill()
+            await proc.wait()
     finally:
         state.finished_at = datetime.now(tz=timezone.utc)
         # Signal all SSE consumers that the stream is done

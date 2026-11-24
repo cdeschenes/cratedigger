@@ -203,7 +203,11 @@ class ReleaseYearLookup:
             )
             headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
             async with httpx.AsyncClient(headers=headers, timeout=timeout) as client:
-                with tqdm(total=len(todo), desc="Original release years", unit="album") as progress:
+                # Redraw every 15 s, not every lookup: one lookup per second for an hour
+                # would otherwise print thousands of redraws on a single line.
+                with tqdm(
+                    total=len(todo), desc="Original release years", unit="album", mininterval=15
+                ) as progress:
                     for i, (k, artist, title) in enumerate(todo, 1):
                         ok, year = await self._fetch(client, artist, title)
                         if ok:
