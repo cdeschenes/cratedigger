@@ -1,4 +1,5 @@
 FROM python:3.12-slim
+\nLABEL org.opencontainers.image.source=https://github.com/cdeschenes/cratedigger
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc \
