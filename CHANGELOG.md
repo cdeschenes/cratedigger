@@ -8,6 +8,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Back-to-top button: a round up-arrow button in the bottom-right corner of every page. It
+  appears once the page is scrolled down (300px, or halfway on short pages) and scrolls
+  smoothly back to the top (instantly when the OS asks for reduced motion).
 - Sort dropdown on the full-page section views (`/section/{section}?sort=...`). Missing Popular
   Albums: artist A–Z (default), most popular, release year newest/oldest, album A–Z. Discover
   Similar Artists: best match (default), artist A–Z, most popular, similar to most of your
