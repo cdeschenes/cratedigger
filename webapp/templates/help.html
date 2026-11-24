@@ -87,6 +87,11 @@
       margin: 1.4rem 0 .6rem;
       scroll-margin-top: 4.5rem;  /* clear the sticky nav when jumped to via #release-years */
     }
+    @media (max-width: 640px) {
+      .help-section h3 { scroll-margin-top: 7rem; }  /* nav is two rows on phones */
+      /* Wide reference tables scroll sideways inside themselves instead of widening the page */
+      .config-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    }
     .config-table th {
       text-align: left;
       color: #555;
@@ -361,7 +366,8 @@
       border-radius: 5px; color: #4ade80;
       font-size: .7rem; font-weight: 700;
     }
-    .icon-meta { display: flex; flex-direction: column; gap: .15rem; }
+    .icon-meta { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+    .icon-meta code { overflow-wrap: anywhere; }
     .icon-name { font-size: .8rem; font-weight: 600; color: #bbb; line-height: 1.2; }
     .icon-desc { font-size: .74rem; color: #555; line-height: 1.4; }
 

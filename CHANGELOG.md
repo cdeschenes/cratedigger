@@ -20,6 +20,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Nav bar overflowing on phones: "Sign out" was cut off at 390px wide, and at 320px wide "Run
+  Dashboard" and "Help" were off-screen too. At 640px and narrower the nav is now two rows
+  (brand + Sign out, then the page links sharing the full width). Also fixed page-content
+  overflow on phones: Help page reference tables now scroll inside themselves, long setting
+  names wrap, and the Report Viewer's section timestamp wraps instead of widening the page.
+
 - Release years on Missing Popular Albums and Discover Similar Artists were wrong for almost
   every album. They came from Last.fm's `wiki.published`, which is the date the album's wiki
   text was last edited, so *Enema of the State* (1999) showed 2026. Years now come from the

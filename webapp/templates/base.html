@@ -101,15 +101,36 @@
     }
     .nav-signout:hover { color: #e0e0e0; }
 
+    /* Phones: two rows so nothing is pushed off-screen.
+       Row 1: brand + Sign out. Row 2: the page links, sharing the full width. */
     @media (max-width: 640px) {
-      .topnav { padding: 0 1rem; }
-      .nav-brand { margin-right: .75rem; }
-      .nav-link { padding: .35rem .5rem; font-size: .8rem; }
+      .topnav {
+        height: auto;
+        flex-wrap: wrap;
+        padding: .55rem 1rem 0;
+        row-gap: .4rem;
+      }
+      .nav-brand { order: 1; margin-right: .75rem; }
+      .nav-right { order: 2; }
+      .nav-links {
+        order: 3;
+        width: 100%;
+        gap: .25rem;
+        padding-bottom: .45rem;
+        overflow-x: auto;           /* last-resort safety net on very narrow screens */
+        scrollbar-width: none;
+      }
+      .nav-links::-webkit-scrollbar { display: none; }
+      .nav-link {
+        flex: 1 1 auto;
+        text-align: center;
+        padding: .45rem .5rem;      /* taller tap target */
+        font-size: .8rem;
+      }
       .nav-version { display: none; }
     }
     @media (max-width: 480px) {
       .nav-github { display: none; }
-      .nav-signout { font-size: .75rem; }
     }
 
     /* Back-to-top button: hidden until the page is scrolled down */
