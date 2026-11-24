@@ -79,6 +79,14 @@
       border-collapse: collapse;
       font-size: .82rem;
     }
+    .help-section p + .config-table { margin-bottom: .85rem; }
+    .help-section h3 {
+      font-size: .9rem;
+      font-weight: 600;
+      color: #ccc;
+      margin: 1.4rem 0 .6rem;
+      scroll-margin-top: 4.5rem;  /* clear the sticky nav when jumped to via #release-years */
+    }
     .config-table th {
       text-align: left;
       color: #555;
@@ -543,6 +551,12 @@
       </div>
     </div>
 
+    <p style="margin-top:.85rem">
+      The year under the album title is the album's <strong>original release year</strong>, taken from MusicBrainz:
+      the first time any edition came out, so a 2024 remaster of a 1977 album shows 1977. If MusicBrainz has no match
+      for the album, the year is left blank rather than guessed. See <a href="#release-years">Release years</a> below.
+    </p>
+
     <!-- Streaming icons -->
     <div class="icon-group-label">Streaming preview — hover the album art</div>
     <div class="icon-row">
@@ -674,6 +688,19 @@
     <p>Each section (Discover and Missing) has its own independent <strong>Prev / Next</strong> pager. Clicking a page button updates only that section without reloading the full page. The URL updates so you can bookmark or share a specific page, and browser Back / Forward navigate between pages as expected.</p>
     <p>The count in the section header shows how many results are available and how many have been dismissed this session. The page indicator (e.g. <strong>3 / 8</strong>) tells you where you are. Prev is disabled on page 1; Next is disabled on the last page.</p>
     <p>After dismissing a card the current page reloads automatically to fill the gap. When a section has no results yet, an empty state with a link to the Run Dashboard is shown.</p>
+    <p>Click a section title to open its <strong>full-page view</strong> (100 cards per page). There, the <strong>Sort</strong> menu next to the title reorders the whole list, not just the current page:</p>
+    <table class="config-table">
+      <thead>
+        <tr><th>Section</th><th>Sort options (first is the default)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Missing Popular Albums</td><td>Artist A–Z, Most popular, Release year: newest, Release year: oldest, Album A–Z</td></tr>
+        <tr><td>Discover Similar Artists</td><td>Best match, Artist A–Z, Most popular, Similar to most of your artists, Release year: newest, Release year: oldest, Album A–Z</td></tr>
+        <tr><td>New &amp; Trending</td><td>Best match, Release date: newest, Release date: oldest, Most sources, Artist A–Z, Album A–Z</td></tr>
+      </tbody>
+    </table>
+    <p>The sort is kept in the address bar, so Prev / Next and bookmarks keep it. Albums with no release year always appear after the dated ones, whichever direction you sort by year.</p>
+    <p>On any page that scrolls, a round <strong>↑</strong> button appears in the bottom-right corner once you've scrolled down. Click it to jump back to the top.</p>
   </div>
 
   <div class="help-section">
@@ -733,6 +760,7 @@
         <tr><td><code>MUSIC_ROOT</code></td><td>Path to your music library on the host (mounted read-only)</td></tr>
         <tr><td><code>DISCOVER_TAG_OVERLAP</code></td><td>Minimum shared Last.fm tags to accept a similarity match (default: 1)</td></tr>
         <tr><td><code>DISCOVER_SIMILARITY_MODE</code></td><td><code>lastfm</code> (default) sorts by shared-listener score. <code>tags</code> re-scores by genre-tag Jaccard similarity and drops zero-overlap matches — eliminates cross-genre results like ambient→hip-hop.</td></tr>
+        <tr><td><code>RELEASE_YEAR_LOOKUP</code></td><td>Look up each album's original release year on MusicBrainz (default: <code>true</code>). <code>false</code> skips the lookups and leaves years blank.</td></tr>
         <tr><td><code>SPOTIFY_CLIENT_ID</code></td><td>Spotify app client ID — enables the Spotify streaming preview button</td></tr>
         <tr><td><code>SPOTIFY_CLIENT_SECRET</code></td><td>Spotify app client secret</td></tr>
         <tr><td><code>YOUTUBE_API_KEY</code></td><td>YouTube Data API v3 key — enables the YouTube streaming preview button</td></tr>
@@ -791,11 +819,24 @@
       <strong>Note:</strong> In <code>lastfm</code> mode, scores near 100% do not guarantee a genre match — they mean Last.fm listeners who play Artist A also tend to play Artist B.
       Use the Discogs and Last.fm links on each card to verify before adding to your collection.
     </div>
+    <h3 id="release-years">Release years</h3>
+    <p>
+      Last.fm doesn't provide a reliable release date. The date it returns is when the album's wiki page was last edited,
+      which is why older reports showed classic albums as released in recent years. Both scripts now ask
+      <strong>MusicBrainz</strong> for the album's first release date, the earliest of all its editions, so reissues and
+      remasters don't change the year.
+    </p>
+    <p>
+      MusicBrainz allows one request per second, so the first run after this change looks up every album once
+      (roughly 12 minutes for Missing Popular Albums and an hour for Discover Similar Artists on a large library).
+      Years are saved in <code>.cache/release_years.json</code> and never looked up again, so later runs only check
+      new albums. Albums MusicBrainz couldn't match are retried after 30 days.
+    </p>
   </div>
 
   <div class="help-section">
     <h2>About</h2>
-    <p>Cratedigger is a self-hosted tool for managing and exploring your personal music library. It runs entirely on your local network and does not send any data to third parties beyond the Last.fm and Navidrome APIs you configure.</p>
+    <p>Cratedigger is a self-hosted tool for managing and exploring your personal music library. It runs entirely on your local network and does not send any data to third parties beyond the Last.fm and Navidrome APIs you configure, plus artist and album names to MusicBrainz for release years (turn off with <code>RELEASE_YEAR_LOOKUP=false</code>).</p>
     <p>Version <strong>{{ version }}</strong> &mdash; <a href="https://github.com/cdeschenes/cratedigger" target="_blank" rel="noopener">github.com/cdeschenes/cratedigger</a></p>
   </div>
 
